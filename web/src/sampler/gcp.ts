@@ -46,7 +46,9 @@ export interface FrameTelemetry {
   reason: string
   // parámetros con los que se calculó la proyección: sin esto los datos no son
   // reproducibles si mañana se recalibra.
-  fov_scale: number
+  fov_h: number // FOV horizontal nominal (grados) fijado por el usuario
+  aspect: number // relación de aspecto del sensor (ancho/alto); deriva el FOV vertical
+  fov_scale: number // factor fino sobre tan(FOV/2) tras fijar el FOV
   d_pitch: number
   d_roll: number
   sync_method: string
@@ -174,7 +176,7 @@ const CSV_COLUMNS = [
   'truth_lat', 'truth_lng', 'truth_dx_m', 'truth_dy_m', 'truth_dist_m',
   'ortho_lat', 'ortho_lng', 'err_ortho_x_m', 'err_ortho_y_m', 'err_ortho_m',
   'att_lat', 'att_lng', 'err_att_x_m', 'err_att_y_m', 'err_att_m',
-  'fov_scale', 'd_pitch', 'd_roll', 'map_zoom',
+  'fov_h_deg', 'aspect', 'fov_scale', 'd_pitch', 'd_roll', 'map_zoom',
   'has_gimbal', 'nadir_ok', 'reason', 'sync_method', 'sync_offset_s', 'terrain_source',
 ]
 
@@ -204,7 +206,7 @@ export function campaignToCsv(c: GcpCampaign): string {
         n(p.err_ortho?.x, 3), n(p.err_ortho?.y, 3), n(p.err_ortho?.direct, 3),
         n(p.attitude?.lat, 8), n(p.attitude?.lng, 8),
         n(p.err_attitude?.x, 3), n(p.err_attitude?.y, 3), n(p.err_attitude?.direct, 3),
-        n(t.fov_scale, 4), n(t.d_pitch, 3), n(t.d_roll, 3), n(p.map_zoom, 2),
+        n(t.fov_h, 3), n(t.aspect, 5), n(t.fov_scale, 4), n(t.d_pitch, 3), n(t.d_roll, 3), n(p.map_zoom, 2),
         t.has_gimbal ? '1' : '0', t.nadir_ok ? '1' : '0', q(t.reason), q(t.sync_method), n(t.sync_offset, 3), q(t.terrain_source || 'flat'),
       ].join(','))
     }

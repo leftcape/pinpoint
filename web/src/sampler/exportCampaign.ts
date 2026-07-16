@@ -342,8 +342,12 @@ COLUMNAS DEL CSV (las que importan)
   truth_dist_m                      distancia verdad-terreno -> nadir del dron.
   agl_m, pitch_deg, roll_deg,       condiciones de vuelo: acotan el dominio de
   drone_pitch_deg, yaw_deg          validez ("vale hasta X m del centro SI…").
-  fov_scale, d_pitch, d_roll        calibración con la que se calculó. Si se
-                                    recalibra, los datos viejos no son comparables.
+  fov_h_deg, aspect, fov_scale,     calibración con la que se calculó. fov_h = FOV
+  d_pitch, d_roll                   horizontal nominal (grados) fijado a ojo;
+                                    aspect = ancho/alto del sensor (deriva el FOV
+                                    vertical); fov_scale = ajuste fino sobre
+                                    tan(FOV/2). Si se recalibra, los datos viejos
+                                    no son comparables.
   map_zoom                          zoom al clicar: acota la precisión del
                                     propio ground-truth (el instrumento de medida).
   nadir_ok, reason                  si el frame estaba fuera del gate cenital.

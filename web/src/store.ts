@@ -9,6 +9,7 @@ import {
   type AngleTuning,
   type SyncMethod,
   type TerrainSource,
+  FOV_H_DEFAULT,
 } from './api'
 import {
   decompose,
@@ -160,7 +161,7 @@ export const useStore = create<State>((set, get) => ({
   gcpBusy: false,
   gcpStorageFull: false,
   nadirThr: { max_pitch_dev: 15, max_roll_dev: 10, min_agl: 20 },
-  tuning: { fov_scale: 1.0, d_pitch: 0, d_roll: 0 },
+  tuning: { fov_h: FOV_H_DEFAULT, aspect: 16 / 9, fov_scale: 1.0, d_pitch: 0, d_roll: 0 },
   terrain: 'flat',
   terrainEffective: null,
 
@@ -472,6 +473,8 @@ export const useStore = create<State>((set, get) => ({
             has_gimbal: fp.has_gimbal,
             nadir_ok: fp.nadir_ok,
             reason: fp.reason,
+            fov_h: s.tuning.fov_h,
+            aspect: s.tuning.aspect,
             fov_scale: s.tuning.fov_scale,
             d_pitch: s.tuning.d_pitch,
             d_roll: s.tuning.d_roll,
@@ -566,6 +569,11 @@ async function loadSource(
 ) {
   const [log, video] = await Promise.all([api.log(id), api.videoInfo(id)])
   set({ sourceId: id, log, video, loading: false, currentTv: 0 })
+  // aspect ratio del sensor inferido de la resolución del vídeo (editable luego).
+  // El FOV vertical se deriva de aquí; el horizontal lo fija el usuario a ojo.
+  if (video.width && video.height) {
+    set({ tuning: { ...get().tuning, aspect: video.width / video.height } })
+  }
   // método por defecto: creation_time si el vídeo lo tiene y no está recodificado; si no, takeoff
   const method: SyncMethod =
     video.creation_time && !video.is_reencoded ? 'creation_time' : 'takeoff'

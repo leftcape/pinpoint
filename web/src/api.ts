@@ -61,30 +61,51 @@ export interface NadirThresholds {
 }
 
 export interface AngleTuning {
-  fov_scale: number // factor sobre tan(FOV/2). Gran angular: ~1.25 (distorsión Brown de ODM)
+  // FOV HORIZONTAL nominal de la cámara (grados). Es el dato PRINCIPAL y editable:
+  // no se conoce a priori con precisión, así que se fija a ojo contra verdad-
+  // terreno. Defecto 72.3° (la estimación de OpenSFM del vuelo de referencia),
+  // sólo un punto de partida.
+  fov_h: number
+  // relación de aspecto del sensor (ancho/alto). Se infiere de la resolución del
+  // vídeo pero es editable (píxel no cuadrado, vídeo estirado). El FOV vertical
+  // NO se toca directamente: sale de aquí -> fov_v = 2·atan(tan(fov_h/2)/aspect).
+  aspect: number
+  // factor fino sobre tan(FOV/2), DESPUÉS de fijar el FOV. Aquí vive la distorsión
+  // de gran angular (modelo de Brown). 1.0 = sin corrección extra.
+  fov_scale: number
   d_pitch: number // delta manual de cabeceo (grados)
   d_roll: number // delta manual de alabeo (grados)
 }
 
-// FOV nominal de la cámara (grados), el mismo valor por defecto que asume el
-// backend en /footprint y /project_point. Se deriva de la focal que OpenSFM
-// ajustó al reconstruir el vuelo de referencia (focal_x=0.6849) — NO es una
-// calibración de laboratorio, por eso se afina con fov_scale contra verdad-
-// terreno. El front lo necesita para traducir fov_scale a grados efectivos:
-//   fov_eff = 2·atan(fov_scale · tan(fov_nominal/2))
-export const FOV_BASE = { h: 72.3, v: 44.6 } as const
-
-// grados efectivos de FOV para un fov_scale dado (corrección en espacio tangente)
-export function fovEffective(fovNominalDeg: number, fovScale: number): number {
-  const t = fovScale * Math.tan((fovNominalDeg * Math.PI) / 360)
+// FOV vertical derivado del horizontal y el aspect ratio del sensor.
+export function fovVerticalFrom(fovHDeg: number, aspect: number): number {
+  const t = Math.tan((fovHDeg * Math.PI) / 360) / aspect
   return (2 * Math.atan(t) * 180) / Math.PI
 }
 
-// fov_scale que produce unos grados efectivos dados (inverso de fovEffective) —
-// para que el slider pueda operar en grados y guardar el factor por debajo
-export function fovScaleForEffective(fovNominalDeg: number, fovEffDeg: number): number {
-  return Math.tan((fovEffDeg * Math.PI) / 360) / Math.tan((fovNominalDeg * Math.PI) / 360)
+// grados efectivos tras aplicar el fov_scale (corrección en espacio tangente).
+// El backend hace lo mismo: fov' = 2·atan(scale·tan(fov/2)).
+export function applyFovScale(fovDeg: number, fovScale: number): number {
+  if (fovScale === 1) return fovDeg
+  const t = fovScale * Math.tan((fovDeg * Math.PI) / 360)
+  return (2 * Math.atan(t) * 180) / Math.PI
 }
+
+// Vuelca el tuning a los query params del backend. Envía el FOV horizontal
+// NOMINAL (editable) y el vertical DERIVADO del aspect ratio; el backend aplica
+// además fov_scale sobre la tangente de ambos, así que ese factor va suelto.
+function setTuningParams(p: URLSearchParams, t: AngleTuning): void {
+  p.set('fov_h', String(t.fov_h))
+  p.set('fov_v', String(fovVerticalFrom(t.fov_h, t.aspect)))
+  p.set('fov_scale', String(t.fov_scale))
+  p.set('d_pitch', String(t.d_pitch))
+  p.set('d_roll', String(t.d_roll))
+}
+
+// FOV horizontal nominal por defecto (grados): la estimación de OpenSFM del vuelo
+// de referencia (focal_x=0.6849). NO es una calibración de laboratorio — sólo un
+// punto de partida; el usuario lo ajusta a ojo contra verdad-terreno.
+export const FOV_H_DEFAULT = 72.3
 
 export type SyncMethod = 'takeoff' | 'creation_time' | 'manual'
 
@@ -166,11 +187,7 @@ export const api = {
       p.set('max_roll_dev', String(thr.max_roll_dev))
       p.set('min_agl', String(thr.min_agl))
     }
-    if (tuning) {
-      p.set('fov_scale', String(tuning.fov_scale))
-      p.set('d_pitch', String(tuning.d_pitch))
-      p.set('d_roll', String(tuning.d_roll))
-    }
+    if (tuning) setTuningParams(p, tuning)
     p.set('terrain', terrain)
     return j<Footprint>(await fetch(`/api/sources/${sid}/footprint?${p}`))
   },
@@ -197,11 +214,7 @@ export const api = {
       method,
       offset: String(offset),
     })
-    if (tuning) {
-      p.set('fov_scale', String(tuning.fov_scale))
-      p.set('d_pitch', String(tuning.d_pitch))
-      p.set('d_roll', String(tuning.d_roll))
-    }
+    if (tuning) setTuningParams(p, tuning)
     if (ortho) p.set('ortho', 'true')
     p.set('terrain', terrain)
     return j<{ lat: number; lng: number; clipped: boolean; valid: boolean; terrain_source?: string }>(

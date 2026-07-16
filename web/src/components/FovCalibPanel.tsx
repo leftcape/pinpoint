@@ -1,48 +1,48 @@
 import { useStore } from '../store'
-import { FOV_BASE, fovEffective, fovScaleForEffective } from '../api'
+import { fovVerticalFrom, applyFovScale, FOV_H_DEFAULT } from '../api'
 
-// PASO 0 — Calibrar el FOV por ESCALA, antes de tomar GCP.
+// PASO 0 — Fijar el FOV de la cámara por ESCALA, antes de tomar GCP.
 //
 // Sin un FOV bien fijado, la huella está mal de escala y los GCP medirían el
-// error de calibración, no el del método. Aquí se calibra con UN solo grado de
-// libertad: el FOV. La huella nadir queda clavada al punto bajo el dron y solo
-// crece/encoge con el slider; la foto se pinta encima del plano (proyección del
-// frame) y se ajusta hasta que casa en escala con la ortofoto/MDT de fondo.
+// error de calibración, no el del método. Aquí se ajusta con UN grado de
+// libertad principal: el FOV horizontal, un dato de la cámara que NO se conoce a
+// priori. La huella nadir queda clavada bajo el dron y solo crece/encoge; la
+// foto se pinta encima del plano (proyección del frame) y se ajusta hasta que
+// casa en escala con la ortofoto/MDT de fondo.
 //
-// Matemática: en nadir sobre suelo plano, medio-ancho_suelo = AGL·tan(FOV/2).
-// El slider mueve los GRADOS efectivos; por debajo se guarda como fov_scale
-// (factor sobre tan(FOV/2), que es donde vive la distorsión de la lente):
-//   fov_scale = tan(FOV_eff/2) / tan(FOV_nominal/2)
+// Matemática: en nadir sobre suelo plano, medio-ancho_suelo = AGL·tan(FOV/2). El
+// FOV vertical NO se toca: sale del aspect ratio del sensor (inferido del vídeo,
+// editable) -> fov_v = 2·atan(tan(fov_h/2)/aspect).
+//
+// El fov_scale es un ajuste FINO posterior (factor sobre tan(FOV/2), donde vive
+// la distorsión de gran angular). Se usa después de fijar el FOV, no en su lugar.
 //
 // Condiciones: frame casi-nadir (pitch≈−90, roll≈0), suelo plano y MDT cargado
 // para la cota. Fuera de nadir la proyección plana no es fiable y se avisa.
 
-// límites del slider en grados efectivos (H). Con FOV_BASE.h=72.3 esto cubre
-// desde algo más estrecho que el nominal hasta un gran angular marcado.
-const FOV_MIN_DEG = 60
-const FOV_MAX_DEG = 105
+// límites de los sliders
+const FOV_MIN = 40
+const FOV_MAX = 140
 
 export function FovCalibPanel() {
   const active = useStore((s) => s.fovCalibMode)
   const setActive = useStore((s) => s.setFovCalibMode)
-  const fovScale = useStore((s) => s.tuning.fov_scale)
+  const tuning = useStore((s) => s.tuning)
   const setTuning = useStore((s) => s.setTuning)
   const terrain = useStore((s) => s.terrain)
   const setTerrain = useStore((s) => s.setTerrain)
   const terrainEffective = useStore((s) => s.terrainEffective)
   const footprint = useStore((s) => s.footprint)
+  const video = useStore((s) => s.video)
   const gcpMode = useStore((s) => s.gcpMode)
 
-  // grados efectivos actuales, derivados del fov_scale guardado
-  const fovH = fovEffective(FOV_BASE.h, fovScale)
-  const fovV = fovEffective(FOV_BASE.v, fovScale)
+  const { fov_h, aspect, fov_scale } = tuning
+  const fovV = fovVerticalFrom(fov_h, aspect)
+  // grados efectivos que REALMENTE usa el backend (FOV nominal tras fov_scale)
+  const effH = applyFovScale(fov_h, fov_scale)
+  const effV = applyFovScale(fovV, fov_scale)
+  const videoAspect = video && video.height ? video.width / video.height : null
 
-  // el slider trabaja en grados H; al mover, se convierte a fov_scale
-  const onFov = (fovEffH: number) => {
-    setTuning('fov_scale', Number(fovScaleForEffective(FOV_BASE.h, fovEffH).toFixed(4)))
-  }
-
-  // ¿el frame actual sirve para calibrar? (nadir + plano no exigido pero avisado)
   const flat = terrain === 'flat'
   const nadirOk = footprint?.valid && footprint.nadir_ok
 
@@ -134,38 +134,114 @@ export function FovCalibPanel() {
             </div>
           )}
 
-          {/* el slider: FOV en GRADOS (guardado como fov_scale por debajo) */}
+          {/* --- FOV horizontal: el dato PRINCIPAL, directo en grados --- */}
           <div className="flex flex-col gap-1 rounded p-2 border bg-indigo-50">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-indigo-800">
-                FOV efectivo (horizontal)
-              </span>
-              <span className="font-mono text-indigo-900">
-                {fovH.toFixed(1)}° <span className="text-indigo-400">× {fovV.toFixed(1)}° V</span>
-              </span>
+              <span className="font-semibold text-indigo-800">FOV horizontal</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={FOV_MIN}
+                  max={FOV_MAX}
+                  step={0.1}
+                  value={Number(fov_h.toFixed(2))}
+                  onChange={(e) => setTuning('fov_h', clamp(parseFloat(e.target.value), FOV_MIN, FOV_MAX))}
+                  className="w-20 text-xs border rounded px-1 py-0.5 font-mono text-right"
+                />
+                <span className="text-indigo-700 text-xs">°</span>
+              </div>
             </div>
             <input
               type="range"
-              min={FOV_MIN_DEG}
-              max={FOV_MAX_DEG}
+              min={FOV_MIN}
+              max={FOV_MAX}
               step={0.1}
-              value={Math.min(FOV_MAX_DEG, Math.max(FOV_MIN_DEG, fovH))}
-              onChange={(e) => onFov(parseFloat(e.target.value))}
+              value={clamp(fov_h, FOV_MIN, FOV_MAX)}
+              onChange={(e) => setTuning('fov_h', parseFloat(e.target.value))}
               className="w-full"
             />
-            <div className="flex items-center justify-between text-[11px] text-indigo-500">
-              <span>{FOV_MIN_DEG}°</span>
+            <div className="flex items-center justify-between text-[11px] text-indigo-600">
               <span>
-                fov_scale = <b className="font-mono">{fovScale.toFixed(3)}</b>
-                <span className="text-indigo-400"> (nominal {FOV_BASE.h}°)</span>
+                FOV vertical <b className="font-mono">{fovV.toFixed(1)}°</b> (del aspect)
               </span>
-              <span>{FOV_MAX_DEG}°</span>
+              <button
+                onClick={() => setTuning('fov_h', FOV_H_DEFAULT)}
+                className="underline text-indigo-400 hover:text-indigo-600"
+                title={`Volver al valor por defecto (${FOV_H_DEFAULT}°, estimación de OpenSFM)`}
+              >
+                reset {FOV_H_DEFAULT}°
+              </button>
+            </div>
+          </div>
+
+          {/* --- Aspect ratio: inferido del vídeo, editable --- */}
+          <div className="flex flex-col gap-1 rounded p-2 border bg-slate-50">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-600">Aspect ratio (ancho/alto)</span>
+              <input
+                type="number"
+                min={0.5}
+                max={4}
+                step={0.001}
+                value={Number(aspect.toFixed(4))}
+                onChange={(e) => setTuning('aspect', clamp(parseFloat(e.target.value), 0.5, 4))}
+                className="w-24 text-xs border rounded px-1 py-0.5 font-mono text-right"
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500">
+              <span>
+                {videoAspect
+                  ? `Vídeo: ${video!.width}×${video!.height} → ${videoAspect.toFixed(3)}`
+                  : 'sin vídeo'}
+              </span>
+              {videoAspect && Math.abs(videoAspect - aspect) > 1e-3 && (
+                <button
+                  onClick={() => setTuning('aspect', videoAspect)}
+                  className="underline text-slate-400 hover:text-slate-600"
+                >
+                  usar el del vídeo
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* --- fov_scale: ajuste FINO posterior (distorsión de bordes) --- */}
+          <div className="flex flex-col gap-1 rounded p-2 border bg-gray-50">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-gray-600">
+                Ajuste fino de escala (opcional)
+              </span>
+              <span className="font-mono text-gray-700">× {fov_scale.toFixed(3)}</span>
+            </div>
+            <input
+              type="range"
+              min={0.8}
+              max={1.3}
+              step={0.005}
+              value={fov_scale}
+              onChange={(e) => setTuning('fov_scale', parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <div className="text-[11px] text-gray-500">
+              Después de fijar el FOV. Factor sobre tan(FOV/2): aquí vive la
+              distorsión de gran angular. FOV efectivo real:{' '}
+              <b className="font-mono">
+                {effH.toFixed(1)}° × {effV.toFixed(1)}°
+              </b>
+              {fov_scale !== 1 && (
+                <button
+                  onClick={() => setTuning('fov_scale', 1)}
+                  className="underline text-gray-400 hover:text-gray-600 ml-2"
+                >
+                  reset ×1
+                </button>
+              )}
             </div>
           </div>
 
           <div className="text-[11px] text-gray-500">
-            El centro de la huella queda clavado bajo el dron; el slider solo cambia
-            la escala. Si el centro cuadra pero los bordes no, ese desajuste es la
+            El centro de la huella queda clavado bajo el dron; el FOV solo cambia la
+            escala. Si el centro cuadra pero los bordes no, ese desajuste es la
             distorsión gran angular (modelo de Brown) — es un resultado, no un fallo.
           </div>
 
@@ -176,13 +252,18 @@ export function FovCalibPanel() {
             ✓ Fijar este FOV y salir
           </button>
           <div className="text-[11px] text-gray-400">
-            El fov_scale queda fijado para toda la campaña. Ahora activa “Ground
-            control points” para medir el error con este FOV.
+            El FOV queda fijado para toda la campaña (se guarda con cada punto).
+            Ahora activa “Ground control points” para medir el error con este FOV.
           </div>
         </>
       )}
     </div>
   )
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  if (Number.isNaN(v)) return lo
+  return Math.min(hi, Math.max(lo, v))
 }
 
 function reasonLabel(reason: string): string {
