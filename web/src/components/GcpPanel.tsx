@@ -8,6 +8,9 @@ import { exportCampaign } from '../sampler/exportCampaign'
 export function GcpPanel() {
   const gcpMode = useStore((s) => s.gcpMode)
   const setGcpMode = useStore((s) => s.setGcpMode)
+  const marking = useStore((s) => s.gcpMarking)
+  const startMarking = useStore((s) => s.gcpStartMarking)
+  const stopMarking = useStore((s) => s.gcpStopMarking)
   const campaign = useStore((s) => s.gcpCampaign)
   const pending = useStore((s) => s.gcpPendingPixel)
   const busy = useStore((s) => s.gcpBusy)
@@ -55,22 +58,45 @@ export function GcpPanel() {
 
       {gcpMode && (
         <>
-          <div
-            className={`text-xs rounded p-2 border ${
-              pending ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-gray-50 text-gray-600'
-            }`}
-          >
-            {busy
-              ? 'Proyectando…'
-              : pending
-                ? '2/2 → ahora haz click en el MAPA, en ese mismo punto.'
-                : '1/2 → haz click en la FOTO, en un punto reconocible.'}
-            {pending && !busy && (
-              <button onClick={cancelPending} className="ml-2 underline text-gray-500">
-                cancelar
+          {!marking ? (
+            <div className="flex flex-col gap-2">
+              <div className="text-xs rounded p-2 border bg-gray-50 text-gray-600">
+                Vídeo libre: muévete al fotograma que quieras (barra o flechas) y pulsa
+                “Empezar a marcar”. Al terminar un frame, vuelve aquí y salta a otro.
+              </div>
+              <button
+                onClick={startMarking}
+                className="px-2 py-1.5 text-sm rounded border bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                🎯 Empezar a marcar este frame
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div
+                className={`text-xs rounded p-2 border ${
+                  pending ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-gray-50 text-gray-600'
+                }`}
+              >
+                {busy
+                  ? 'Proyectando…'
+                  : pending
+                    ? '2/2 → ahora haz click en el MAPA, en ese mismo punto.'
+                    : '1/2 → haz click en la FOTO, en un punto reconocible.'}
+                {pending && !busy && (
+                  <button onClick={cancelPending} className="ml-2 underline text-gray-500">
+                    cancelar
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={stopMarking}
+                className="px-2 py-1.5 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                ✓ Terminar este frame (mover el vídeo)
+              </button>
+            </div>
+          )}
 
           {/* lista de frames y sus puntos */}
           {campaign.frames.length === 0 ? (

@@ -17,6 +17,7 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
   const markMode = useStore((s) => s.markMode)
   const markPoint = useStore((s) => s.markPoint)
   const gcpMode = useStore((s) => s.gcpMode)
+  const gcpMarking = useStore((s) => s.gcpMarking)
   const gcpClickPhoto = useStore((s) => s.gcpClickPhoto)
   const gcpPendingPixel = useStore((s) => s.gcpPendingPixel)
   const gcpCampaign = useStore((s) => s.gcpCampaign)
@@ -145,7 +146,7 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
       {/* Modo GCP: mismo truco de overlay. Con lupa, porque a 100 m de altura un
           píxel es ~12 cm: un temblor de 3 px mete 36 cm de ruido en una medida
           donde se discuten metros. */}
-      {gcpMode && (
+      {gcpMode && gcpMarking && (
         <div
           onClick={onGcpClick}
           onMouseMove={(e) => {
@@ -154,7 +155,7 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
             setLens({ x: e.clientX - b.rect.left, y: e.clientY - b.rect.top })
           }}
           onMouseLeave={() => setLens(null)}
-          className="absolute inset-x-0 top-0 bottom-10 cursor-crosshair"
+          className="absolute inset-x-0 top-0 bottom-14 cursor-crosshair"
           title="Click the feature on the photo, then click it on the map"
         >
           {/* retícula fina de precisión */}

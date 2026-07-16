@@ -65,6 +65,10 @@ interface State {
 
   // --- puntos de control (GCP) para el paper ---
   gcpMode: boolean // modo toma de puntos: foto y mapa lado a lado
+  // Dentro del modo GCP: ¿estamos MARCANDO en este frame? Si true, el overlay
+  // captura los clicks del vídeo (no se puede mover). Si false, el vídeo es
+  // libre (mover la barra, saltar de frame). Se cierra con "terminar frame".
+  gcpMarking: boolean
   gcpCampaign: GcpCampaign // frames + puntos acumulados (persistida en localStorage)
   // Click pendiente en la FOTO, esperando su pareja en el MAPA. Lleva SU PROPIO
   // tv: el píxel pertenece al instante en que se clicó, no al que haya cuando se
@@ -113,6 +117,8 @@ interface State {
   refreshFootprint: () => Promise<void>
   // --- puntos de control ---
   setGcpMode: (on: boolean) => void
+  gcpStartMarking: () => void // empezar a marcar en el frame actual (activa el overlay)
+  gcpStopMarking: () => void  // terminar este frame (libera el vídeo para moverse)
   gcpClickPhoto: (px: number, py: number) => void // 1º: click en la foto
   gcpClickMap: (lng: number, lat: number) => Promise<void> // 2º: click en el mapa -> cierra el punto
   gcpCancelPending: () => void
@@ -154,6 +160,7 @@ export const useStore = create<State>((set, get) => ({
   mapHandle: null,
   footprint: null,
   gcpMode: false,
+  gcpMarking: false,
   gcpCampaign: loadCampaign() ?? { started_at: new Date().toISOString(), source_id: null, frames: [] },
   gcpPendingPixel: null,
   gcpSelected: null,
@@ -350,8 +357,20 @@ export const useStore = create<State>((set, get) => ({
   setGcpMode(on) {
     // el footprint es imprescindible: de ahí salen los ángulos y el AGL que
     // acompañan a cada punto.
-    set({ gcpMode: on, gcpPendingPixel: null, gcpSelected: null })
+    set({ gcpMode: on, gcpMarking: false, gcpPendingPixel: null, gcpSelected: null })
     if (on && !get().footprint) get().refreshFootprint()
+  },
+
+  gcpStartMarking() {
+    // pausar el vídeo al empezar: el frame que se marca es el que se ve.
+    get().videoEl?.pause()
+    set({ gcpMarking: true, gcpSelected: null })
+  },
+
+  gcpStopMarking() {
+    // terminar el frame: se descarta cualquier click a medias y se libera el
+    // vídeo para moverse a otro instante.
+    set({ gcpMarking: false, gcpPendingPixel: null })
   },
 
   gcpClickPhoto(px, py) {
