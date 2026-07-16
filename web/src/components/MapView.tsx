@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useStore } from '../store'
+import { api } from '../api'
 import { warpFrameToQuad } from '../warp'
 import { frameIndex, type GcpPoint } from '../sampler/gcp'
 
@@ -58,6 +59,10 @@ export function MapView() {
   const markedPoint = useStore((s) => s.markedPoint)
   const markMarkerRef = useRef<maplibregl.Marker | null>(null)
   const [base, setBase] = useState<'pnoa' | 'osm'>('pnoa')
+  const sourceId = useStore((s) => s.sourceId)
+  const terrain = useStore((s) => s.terrain)
+  const [showDem, setShowDem] = useState(false) // capa MDT visible (hillshade)
+  const [demZ, setDemZ] = useState<number | null>(null) // altura bajo el cursor
   const gcpMode = useStore((s) => s.gcpMode)
   const gcpClickMap = useStore((s) => s.gcpClickMap)
   const gcpPendingPixel = useStore((s) => s.gcpPendingPixel)
@@ -293,6 +298,80 @@ export function MapView() {
     }
   }, [markedPoint])
 
+  // capa MDT visible: el mismo ráster que gobierna el AGL, coloreado (hillshade
+  // + rampa de altura). Se pinta como image source sobre sus bounds.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const SRC = 'dem-layer'
+    const remove = () => {
+      if (map.getLayer(`${SRC}-l`)) map.removeLayer(`${SRC}-l`)
+      if (map.getSource(SRC)) map.removeSource(SRC)
+    }
+    if (!showDem || !sourceId || terrain === 'flat') {
+      remove()
+      return
+    }
+    let cancelled = false
+    api
+      .terrainMeta(sourceId, terrain)
+      .then((meta) => {
+        if (cancelled || !meta.available || !meta.bounds) return
+        remove()
+        // MapLibre pide las 4 esquinas TL,TR,BR,BL como [lng,lat]
+        const b = meta.bounds
+        const coords: [[number, number], [number, number], [number, number], [number, number]] = [
+          [b[0][0], b[0][1]],
+          [b[1][0], b[1][1]],
+          [b[2][0], b[2][1]],
+          [b[3][0], b[3][1]],
+        ]
+        map.addSource(SRC, {
+          type: 'image',
+          url: api.terrainImageUrl(sourceId, terrain),
+          coordinates: coords,
+        })
+        map.addLayer({ id: `${SRC}-l`, type: 'raster', source: SRC, paint: { 'raster-opacity': 0.85 } })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [showDem, sourceId, terrain])
+
+  // altura del terreno bajo el cursor (solo con la capa MDT activa)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!showDem || !sourceId || terrain === 'flat') {
+      setDemZ(null)
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let lastToken = 0
+    const onMove = (e: maplibregl.MapMouseEvent) => {
+      if (timer) clearTimeout(timer)
+      const { lng, lat } = e.lngLat
+      timer = setTimeout(async () => {
+        const token = ++lastToken
+        try {
+          const r = await api.terrainElevation(sourceId, lat, lng, terrain)
+          if (token === lastToken) setDemZ(r.z)
+        } catch {
+          /* ignore */
+        }
+      }, 60) // debounce: no una petición por píxel
+    }
+    const onLeave = () => setDemZ(null)
+    map.on('mousemove', onMove)
+    map.on('mouseout', onLeave)
+    return () => {
+      map.off('mousemove', onMove)
+      map.off('mouseout', onLeave)
+      if (timer) clearTimeout(timer)
+    }
+  }, [showDem, sourceId, terrain])
+
   // cursor cruz cuando medimos o cuando hay un píxel esperando su pareja
   useEffect(() => {
     const map = mapRef.current
@@ -525,13 +604,35 @@ export function MapView() {
     <div className={`relative w-full h-full ${isMini ? 'map-mini' : ''}`}>
       <div ref={containerRef} className="w-full h-full" />
       {!isMini && (
-        <button
-          onClick={toggleBase}
-          className="absolute top-2 right-2 z-10 bg-white/90 border border-gray-300 rounded px-3 py-1 text-xs font-semibold shadow hover:bg-white"
-          title="Toggle between orthophoto (PNOA) and street map (OSM)"
-        >
-          {base === 'pnoa' ? '🛰 Satellite (PNOA)' : '🗺 Street map (OSM)'}
-        </button>
+        <div className="absolute top-2 right-2 z-10 flex gap-2">
+          {terrain !== 'flat' && (
+            <button
+              onClick={() => setShowDem((v) => !v)}
+              className={`border rounded px-3 py-1 text-xs font-semibold shadow ${
+                showDem
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white/90 border-gray-300 hover:bg-white'
+              }`}
+              title="Mostrar/ocultar el modelo del terreno (MDT) coloreado"
+            >
+              ⛰ MDT {terrain === 'ign' ? '(IGN)' : '(Cop)'}
+            </button>
+          )}
+          <button
+            onClick={toggleBase}
+            className="bg-white/90 border border-gray-300 rounded px-3 py-1 text-xs font-semibold shadow hover:bg-white"
+            title="Alternar entre ortofoto (PNOA) y callejero (OSM)"
+          >
+            {base === 'pnoa' ? '🛰 Satellite (PNOA)' : '🗺 Street map (OSM)'}
+          </button>
+        </div>
+      )}
+
+      {/* altura del terreno bajo el cursor (solo con la capa MDT activa) */}
+      {!isMini && showDem && terrain !== 'flat' && (
+        <div className="absolute bottom-2 left-2 z-10 bg-black/75 text-white rounded px-3 py-1.5 text-xs font-mono shadow">
+          {demZ != null ? `${demZ.toFixed(1)} m` : 'terreno: —'}
+        </div>
       )}
     </div>
   )

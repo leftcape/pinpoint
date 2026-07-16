@@ -108,6 +108,24 @@ export const api = {
     return `/api/sources/${sid}/video/stream`
   },
 
+  // --- capa MDT (terreno visible) ---
+  async terrainMeta(sid: string, terrain: TerrainSource) {
+    return j<{ available: boolean; terrain_source: string; bounds?: [number, number][] }>(
+      await fetch(`/api/sources/${sid}/terrain/meta?terrain=${terrain}`),
+    )
+  },
+
+  terrainImageUrl(sid: string, terrain: TerrainSource) {
+    return `/api/sources/${sid}/terrain/image?terrain=${terrain}`
+  },
+
+  async terrainElevation(sid: string, lat: number, lng: number, terrain: TerrainSource) {
+    const p = new URLSearchParams({ lat: String(lat), lng: String(lng), terrain })
+    return j<{ terrain_source: string; z: number | null }>(
+      await fetch(`/api/sources/${sid}/terrain/elevation?${p}`),
+    )
+  },
+
   async position(sid: string, tv: number, method: SyncMethod, offset = 0) {
     const p = new URLSearchParams({ tv: String(tv), method, offset: String(offset) })
     return j<Position>(await fetch(`/api/sources/${sid}/position?${p}`))

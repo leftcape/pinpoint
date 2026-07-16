@@ -110,6 +110,75 @@ class RasterTerrain:
             return None
         return v + self.undulation
 
+    def bounds_lnglat(self) -> list[list[float]]:
+        """4 esquinas [lng,lat] del ráster en orden TL,TR,BR,BL — para pegar la
+        imagen coloreada en el mapa (MapLibre image source)."""
+        h, w = self._data.shape
+        tr = self._transform
+        tl = tr * (0, 0)
+        trr = tr * (w, 0)
+        br = tr * (w, h)
+        bl = tr * (0, h)
+        return [[tl[0], tl[1]], [trr[0], trr[1]], [br[0], br[1]], [bl[0], bl[1]]]
+
+    def render_png(self) -> bytes | None:
+        """Colorea el ráster: rampa de altura + relieve sombreado (hillshade), con
+        transparencia donde no hay dato. Es EL MISMO ráster que se usa para el
+        AGL, así que ves exactamente el modelo que gobierna la proyección."""
+        try:
+            import numpy as np
+            from PIL import Image
+        except ImportError:
+            return None
+
+        z = np.asarray(self._data, dtype="float64")
+        valid = np.isfinite(z) & (z > -1000)
+        if self.nodata is not None:
+            valid &= z != self.nodata
+        if not valid.any():
+            return None
+
+        zmin = float(np.percentile(z[valid], 2))
+        zmax = float(np.percentile(z[valid], 98))
+        rng = max(zmax - zmin, 1e-6)
+        t = np.clip((z - zmin) / rng, 0.0, 1.0)  # 0..1 por altura
+
+        # rampa tipo terreno: verde-bajo -> ocre -> marrón -> blanco-alto
+        stops = np.array([
+            [0.0, 60, 120, 70],
+            [0.35, 180, 170, 90],
+            [0.6, 150, 110, 60],
+            [0.85, 120, 90, 70],
+            [1.0, 245, 245, 245],
+        ])
+        rgb = np.empty(z.shape + (3,), dtype="float64")
+        for k in range(3):
+            rgb[..., k] = np.interp(t, stops[:, 0], stops[:, k + 1])
+
+        # hillshade: iluminación desde el NO (az 315°, alt 45°) sobre la pendiente
+        px_deg = abs(self._transform.a)
+        m_per_deg = 111320.0
+        cell = max(px_deg * m_per_deg, 1e-3)
+        gy, gx = np.gradient(np.where(valid, z, zmin), cell)
+        slope = np.arctan(np.hypot(gx, gy))
+        aspect = np.arctan2(-gx, gy)
+        az = np.radians(315.0)
+        alt = np.radians(45.0)
+        shade = (np.sin(alt) * np.cos(slope) +
+                 np.cos(alt) * np.sin(slope) * np.cos(az - aspect))
+        shade = np.clip(shade, 0.0, 1.0)
+        # mezcla: color modulado por el sombreado (0.5..1.15 para no apagar del todo)
+        f = (0.5 + 0.65 * shade)[..., None]
+        out = np.clip(rgb * f, 0, 255).astype("uint8")
+
+        alpha = np.where(valid, 220, 0).astype("uint8")  # semitransparente
+        rgba = np.dstack([out, alpha])
+        img = Image.fromarray(rgba, mode="RGBA")
+        import io as _io
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
 
 def _read_geotiff(raw: bytes, source: TerrainSource, undulation: float = 0.0) -> RasterTerrain | None:
     """Parsea un GeoTIFF en memoria a RasterTerrain. Usa rasterio (robusto con

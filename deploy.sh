@@ -39,12 +39,15 @@ ssh ${SSH_OPTS} "${REMOTE}" "mkdir -p ${REMOTE_DIR} ${DATA_HOST:+'$DATA_HOST'}"
 
 # Copiamos el código fuente. Excluimos node_modules/dist (se construyen en el
 # servidor) y los datos de trabajo.
-rsync -avz -e "ssh ${SSH_OPTS}" \
+# --delete: borra en el servidor lo que ya no exista en local (p.ej. un componente
+# eliminado), o quedaría como fichero fantasma y rompería el build.
+rsync -avz --delete -e "ssh ${SSH_OPTS}" \
     --exclude='web/node_modules' \
     --exclude='web/dist' \
     --exclude='__pycache__' \
     --exclude='pinpoint-data' \
     --exclude='.git' \
+    --exclude='.env' \
     "$SCRIPT_DIR/" "${REMOTE}:${REMOTE_DIR}/"
 
 echo "==> Construyendo y levantando contenedor (build del front + backend) ..."

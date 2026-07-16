@@ -393,6 +393,51 @@ def source_project_point(
     return r
 
 
+@app.get("/api/sources/{sid}/terrain/meta")
+def terrain_meta(sid: str, terrain: str = Query("ign")):
+    """Metadatos de la capa MDT: bounds [lng,lat] para pegar la imagen y la
+    fuente efectiva. Vacío (available=False) si no hay ráster (flat / fuera de
+    cobertura)."""
+    s = _get_source(sid)
+    model, eff = s.terrain(terrain)
+    if eff == "flat" or not hasattr(model, "bounds_lnglat"):
+        return {"available": False, "terrain_source": eff}
+    return {
+        "available": True,
+        "terrain_source": eff,
+        "bounds": model.bounds_lnglat(),   # TL,TR,BR,BL [lng,lat]
+    }
+
+
+@app.get("/api/sources/{sid}/terrain/image")
+def terrain_image(sid: str, terrain: str = Query("ign")):
+    """PNG coloreado del MDT (hillshade + rampa de altura) para pintarlo como
+    capa. Es el MISMO ráster que se usa para el AGL."""
+    s = _get_source(sid)
+    model, eff = s.terrain(terrain)
+    if eff == "flat" or not hasattr(model, "render_png"):
+        raise HTTPException(404, "no hay MDT para esta fuente")
+    png = model.render_png()
+    if not png:
+        raise HTTPException(500, "no se pudo renderizar el MDT (¿falta Pillow?)")
+    return Response(content=png, media_type="image/png")
+
+
+@app.get("/api/sources/{sid}/terrain/elevation")
+def terrain_elevation(
+    sid: str,
+    lat: float = Query(...),
+    lng: float = Query(...),
+    terrain: str = Query("ign"),
+):
+    """Cota del terreno (MSL, m) en un punto — para mostrarla al pasar el ratón.
+    z=None si el punto está fuera del ráster."""
+    s = _get_source(sid)
+    model, eff = s.terrain(terrain)
+    z = None if eff == "flat" else model.elevation(lat, lng)
+    return {"terrain_source": eff, "z": z}
+
+
 # --- front estático (si existe web/dist) ---
 # El front se construye en web/dist; el server lo sirve en / si está presente
 # (en desarrollo se usa el dev-server de Vite y esto no aplica).
