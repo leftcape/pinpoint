@@ -46,9 +46,8 @@ export interface FrameTelemetry {
   reason: string
   // parámetros con los que se calculó la proyección: sin esto los datos no son
   // reproducibles si mañana se recalibra.
-  fov_h: number // FOV horizontal nominal (grados) fijado por el usuario
+  fov_h: number // FOV horizontal (grados) fijado a ojo por el usuario
   aspect: number // relación de aspecto del sensor (ancho/alto); deriva el FOV vertical
-  fov_scale: number // factor fino sobre tan(FOV/2) tras fijar el FOV
   d_pitch: number
   d_roll: number
   sync_method: string
@@ -176,7 +175,7 @@ const CSV_COLUMNS = [
   'truth_lat', 'truth_lng', 'truth_dx_m', 'truth_dy_m', 'truth_dist_m',
   'ortho_lat', 'ortho_lng', 'err_ortho_x_m', 'err_ortho_y_m', 'err_ortho_m',
   'att_lat', 'att_lng', 'err_att_x_m', 'err_att_y_m', 'err_att_m',
-  'fov_h_deg', 'aspect', 'fov_scale', 'd_pitch', 'd_roll', 'map_zoom',
+  'fov_h_deg', 'aspect', 'd_pitch', 'd_roll', 'map_zoom',
   'has_gimbal', 'nadir_ok', 'reason', 'sync_method', 'sync_offset_s', 'terrain_source',
 ]
 
@@ -206,7 +205,7 @@ export function campaignToCsv(c: GcpCampaign): string {
         n(p.err_ortho?.x, 3), n(p.err_ortho?.y, 3), n(p.err_ortho?.direct, 3),
         n(p.attitude?.lat, 8), n(p.attitude?.lng, 8),
         n(p.err_attitude?.x, 3), n(p.err_attitude?.y, 3), n(p.err_attitude?.direct, 3),
-        n(t.fov_h, 3), n(t.aspect, 5), n(t.fov_scale, 4), n(t.d_pitch, 3), n(t.d_roll, 3), n(p.map_zoom, 2),
+        n(t.fov_h, 3), n(t.aspect, 5), n(t.d_pitch, 3), n(t.d_roll, 3), n(p.map_zoom, 2),
         t.has_gimbal ? '1' : '0', t.nadir_ok ? '1' : '0', q(t.reason), q(t.sync_method), n(t.sync_offset, 3), q(t.terrain_source || 'flat'),
       ].join(','))
     }
@@ -214,55 +213,3 @@ export function campaignToCsv(c: GcpCampaign): string {
   return rows.join('\n') + '\n'
 }
 
-// ---------- estimación de fov_scale ----------
-
-export interface FovEstimate {
-  scale: number
-  rmse_before: number
-  rmse_after: number
-  n_points: number
-}
-
-// La FOV es un factor de ESCALA: mueve cada punto radialmente desde el nadir en
-// proporción a su distancia. El roll, en cambio, mete un sesgo direccional. Con
-// puntos a distintas distancias del centro ambos se separan.
-//
-// Estimador: el `s` que minimiza Σ|s·proj − truth|² sobre los vectores desde el
-// nadir es la proyección escalar Σ(p·t)/Σ(p·p). Ojo: es una aproximación de
-// primer orden — el fov_scale real actúa en espacio tangente (fov' =
-// 2·atan(s·tan(fov/2))), no sobre la distancia en suelo. Cerca del centro
-// coinciden; en los bordes, no. Sirve como PUNTO DE PARTIDA para el slider, no
-// como calibración definitiva: para eso hay que barrer contra el backend.
-export function estimateFovScale(
-  frames: GcpFrame[],
-  which: 'ortho' | 'attitude' = 'ortho',
-): FovEstimate | null {
-  let num = 0
-  let den = 0
-  let count = 0
-  const pairs: { p: Decomp; t: Decomp }[] = []
-
-  for (const f of frames) {
-    const nadir = f.telemetry.drone
-    for (const pt of f.points) {
-      const proj = which === 'ortho' ? pt.ortho : pt.attitude
-      if (!proj) continue
-      const p = decompose(nadir, proj)
-      const t = pt.truth_from_nadir
-      if (p.direct < 1e-6) continue
-      num += p.x * t.x + p.y * t.y
-      den += p.x * p.x + p.y * p.y
-      pairs.push({ p, t })
-      count++
-    }
-  }
-  if (count < 2 || den < 1e-9) return null
-
-  const scale = num / den
-  const rmse = (s: number) =>
-    Math.sqrt(
-      pairs.reduce((acc, { p, t }) => acc + (s * p.x - t.x) ** 2 + (s * p.y - t.y) ** 2, 0) /
-        pairs.length,
-    )
-  return { scale, rmse_before: rmse(1), rmse_after: rmse(scale), n_points: count }
-}

@@ -278,7 +278,6 @@ def source_footprint(
     max_pitch_dev: float = Query(15.0, description="desviación máx pitch vs -90° (grados)"),
     max_roll_dev: float = Query(10.0, description="|roll| máximo (grados)"),
     min_agl: float = Query(20.0, description="altura mínima sobre terreno (m)"),
-    fov_scale: float = Query(1.0, description="factor sobre tan(FOV/2) — gran angular: ~1.25 según la distorsión Brown de ODM"),
     d_pitch: float = Query(0.0, description="delta manual de cabeceo (grados)"),
     d_roll: float = Query(0.0, description="delta manual de alabeo (grados)"),
     terrain: str = Query("flat", description="modelo del terreno: flat | ign | srtm"),
@@ -302,13 +301,6 @@ def source_footprint(
         sr = _sync.manual(offset)
     else:
         raise HTTPException(400, f"method desconocido: {method}")
-
-    # fov_scale actúa en espacio tangente (donde vive la distorsión de la lente):
-    # fov' = 2·atan(scale · tan(fov/2))
-    import math as _math
-    if fov_scale != 1.0:
-        fov_h = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_h / 2))))
-        fov_v = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_v / 2))))
 
     ground_msl, terrain_eff = _ground_under_drone(s, sr, tv, terrain)
 
@@ -352,7 +344,6 @@ def source_project_point(
     offset: float = Query(0.0),
     fov_h: float = Query(72.3),
     fov_v: float = Query(44.6),
-    fov_scale: float = Query(1.0),
     d_pitch: float = Query(0.0),
     d_roll: float = Query(0.0),
     ortho: bool = Query(False, description="cancelar la actitud: pinhole nadir puro (línea base)"),
@@ -366,7 +357,6 @@ def source_project_point(
 
     terrain elige el modelo del terreno para el AGL (flat = cota del despegue;
     ign/cop = cota real bajo el dron). La fuente efectiva va en 'terrain_source'."""
-    import math as _math
     s = _get_source(sid)
     log = s.log()
     if method == "takeoff":
@@ -377,10 +367,6 @@ def source_project_point(
         sr = _sync.manual(offset)
     else:
         raise HTTPException(400, f"method desconocido: {method}")
-
-    if fov_scale != 1.0:
-        fov_h = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_h / 2))))
-        fov_v = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_v / 2))))
 
     ground_msl, terrain_eff = _ground_under_drone(s, sr, tv, terrain)
 

@@ -70,9 +70,6 @@ export interface AngleTuning {
   // vídeo pero es editable (píxel no cuadrado, vídeo estirado). El FOV vertical
   // NO se toca directamente: sale de aquí -> fov_v = 2·atan(tan(fov_h/2)/aspect).
   aspect: number
-  // factor fino sobre tan(FOV/2), DESPUÉS de fijar el FOV. Aquí vive la distorsión
-  // de gran angular (modelo de Brown). 1.0 = sin corrección extra.
-  fov_scale: number
   d_pitch: number // delta manual de cabeceo (grados)
   d_roll: number // delta manual de alabeo (grados)
 }
@@ -83,21 +80,11 @@ export function fovVerticalFrom(fovHDeg: number, aspect: number): number {
   return (2 * Math.atan(t) * 180) / Math.PI
 }
 
-// grados efectivos tras aplicar el fov_scale (corrección en espacio tangente).
-// El backend hace lo mismo: fov' = 2·atan(scale·tan(fov/2)).
-export function applyFovScale(fovDeg: number, fovScale: number): number {
-  if (fovScale === 1) return fovDeg
-  const t = fovScale * Math.tan((fovDeg * Math.PI) / 360)
-  return (2 * Math.atan(t) * 180) / Math.PI
-}
-
 // Vuelca el tuning a los query params del backend. Envía el FOV horizontal
-// NOMINAL (editable) y el vertical DERIVADO del aspect ratio; el backend aplica
-// además fov_scale sobre la tangente de ambos, así que ese factor va suelto.
+// (editable a ojo) y el vertical DERIVADO del aspect ratio.
 function setTuningParams(p: URLSearchParams, t: AngleTuning): void {
   p.set('fov_h', String(t.fov_h))
   p.set('fov_v', String(fovVerticalFrom(t.fov_h, t.aspect)))
-  p.set('fov_scale', String(t.fov_scale))
   p.set('d_pitch', String(t.d_pitch))
   p.set('d_roll', String(t.d_roll))
 }

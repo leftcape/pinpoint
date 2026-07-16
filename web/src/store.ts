@@ -161,7 +161,7 @@ export const useStore = create<State>((set, get) => ({
   gcpBusy: false,
   gcpStorageFull: false,
   nadirThr: { max_pitch_dev: 15, max_roll_dev: 10, min_agl: 20 },
-  tuning: { fov_h: FOV_H_DEFAULT, aspect: 16 / 9, fov_scale: 1.0, d_pitch: 0, d_roll: 0 },
+  tuning: { fov_h: FOV_H_DEFAULT, aspect: 16 / 9, d_pitch: 0, d_roll: 0 },
   terrain: 'flat',
   terrainEffective: null,
 
@@ -257,8 +257,8 @@ export const useStore = create<State>((set, get) => ({
   setFovCalibMode(on) {
     if (on) {
       // paso 0: mapa grande (para ver el encaje), foto proyectada encima del
-      // plano, vídeo pausado en el frame que se calibra. La huella nadir ya
-      // escala con tuning.fov_scale, así que el slider de FOV mueve la escala.
+      // plano, vídeo pausado en el frame que se calibra. La huella nadir escala
+      // con tuning.fov_h, así que ajustar el FOV mueve la escala de la huella.
       get().videoEl?.pause()
       set({ fovCalibMode: on, projectFrame: true, obliqueProject: false, swapView: false })
       get().refreshFootprint()
@@ -475,7 +475,6 @@ export const useStore = create<State>((set, get) => ({
             reason: fp.reason,
             fov_h: s.tuning.fov_h,
             aspect: s.tuning.aspect,
-            fov_scale: s.tuning.fov_scale,
             d_pitch: s.tuning.d_pitch,
             d_roll: s.tuning.d_roll,
             sync_method: s.syncMethod,

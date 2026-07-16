@@ -15,7 +15,7 @@ import type { StoreApi } from 'zustand'
 import maplibregl from 'maplibre-gl'
 import { useStore } from '../store'
 import { buildZip, textEntry, bytesEntry, dataUrlToBytes } from './zip'
-import { campaignToCsv, estimateFovScale, type GcpFrame } from './gcp'
+import { campaignToCsv, type GcpFrame } from './gcp'
 
 type Store = ReturnType<typeof useStore.getState>
 
@@ -291,14 +291,13 @@ export async function exportCampaign(): Promise<ExportResult> {
     if (video) await seekVideo(video, saved.tv)
   }
 
-  const fov = estimateFovScale(campaign.frames, 'ortho')
   const total = campaign.frames.reduce((a, f) => a + f.points.length, 0)
 
   files.push({ name: 'points.csv', data: new TextEncoder().encode(campaignToCsv(campaign)) })
   files.push({
     name: 'campaign.json',
     data: new TextEncoder().encode(
-      JSON.stringify({ ...campaign, exported_at: new Date().toISOString(), fov_estimate: fov }, null, 2),
+      JSON.stringify({ ...campaign, exported_at: new Date().toISOString() }, null, 2),
     ),
   })
 
@@ -342,12 +341,11 @@ COLUMNAS DEL CSV (las que importan)
   truth_dist_m                      distancia verdad-terreno -> nadir del dron.
   agl_m, pitch_deg, roll_deg,       condiciones de vuelo: acotan el dominio de
   drone_pitch_deg, yaw_deg          validez ("vale hasta X m del centro SI…").
-  fov_h_deg, aspect, fov_scale,     calibración con la que se calculó. fov_h = FOV
-  d_pitch, d_roll                   horizontal nominal (grados) fijado a ojo;
-                                    aspect = ancho/alto del sensor (deriva el FOV
-                                    vertical); fov_scale = ajuste fino sobre
-                                    tan(FOV/2). Si se recalibra, los datos viejos
-                                    no son comparables.
+  fov_h_deg, aspect, d_pitch,       calibración con la que se calculó. fov_h = FOV
+  d_roll                            horizontal (grados) fijado a ojo; aspect =
+                                    ancho/alto del sensor (deriva el FOV vertical).
+                                    Si se recalibra, los datos viejos no son
+                                    comparables.
   map_zoom                          zoom al clicar: acota la precisión del
                                     propio ground-truth (el instrumento de medida).
   nadir_ok, reason                  si el frame estaba fuera del gate cenital.
@@ -360,17 +358,7 @@ CONVENIOS
   pitch = gimbal (marco terrestre, -90 = nadir); roll = del dron (la cámara no
   lo compensa: gimbal de 1 eje); drone_pitch = cabeceo del cuerpo, interviene en
   la geometría del contorno.
-${
-  fov
-    ? `
-ESTIMACIÓN DE fov_scale (aproximación de 1er orden, sólo orientativa)
-  scale = ${fov.scale.toFixed(4)} sobre ${fov.n_points} punto(s)
-  RMSE ${fov.rmse_before.toFixed(2)} m -> ${fov.rmse_after.toFixed(2)} m
-  La FOV escala el error radialmente desde el nadir; el roll mete un sesgo
-  direccional. Con puntos a distintas distancias del centro se separan.
-`
-    : ''
-}`,
+`,
     ),
   )
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { estimateFovScale, frameIndex } from '../sampler/gcp'
+import { frameIndex } from '../sampler/gcp'
 import { exportCampaign } from '../sampler/exportCampaign'
 
 // Toma de puntos de control: foto y mapa lado a lado, click-click por punto,
@@ -28,17 +28,11 @@ export function GcpPanel() {
   const currentTv = useStore((s) => s.currentTv)
   const video = useStore((s) => s.video)
   const storageFull = useStore((s) => s.gcpStorageFull)
-  const fovScale = useStore((s) => s.tuning.fov_scale)
-  const setTuning = useStore((s) => s.setTuning)
   const [note, setNote] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
   const total = campaign.frames.reduce((a, f) => a + f.points.length, 0)
-  const fov = estimateFovScale(campaign.frames, 'ortho')
   const curFi = video ? frameIndex(currentTv, video.fps) : -1
-  // el estimador es RELATIVO a la escala con la que se proyectó: es un factor
-  // corrector sobre la actual, no un valor absoluto.
-  const suggested = fov ? fov.scale * fovScale : null
 
   const doExport = async () => {
     setExporting(true)
@@ -218,36 +212,6 @@ export function GcpPanel() {
                   </div>
                 )
               })}
-            </div>
-          )}
-
-          {/* estimación de la escala: la FOV es un factor radial, el roll un
-              sesgo direccional — con puntos repartidos se separan. */}
-          {fov && suggested && (
-            <div className="text-[11px] bg-indigo-50 border border-indigo-200 rounded p-2 text-indigo-900">
-              <div className="flex items-center justify-between">
-                <span>
-                  fov_scale sugerido: <b>{suggested.toFixed(3)}</b>{' '}
-                  <span className="text-indigo-500">
-                    ({fovScale.toFixed(3)} × {fov.scale.toFixed(3)})
-                  </span>
-                </span>
-                <button
-                  onClick={() => setTuning('fov_scale', Number(suggested.toFixed(4)))}
-                  className="px-1.5 py-0.5 rounded border border-indigo-300 bg-white hover:bg-indigo-100"
-                  title="Aplicar al slider de FOV"
-                >
-                  aplicar
-                </button>
-              </div>
-              <div className="text-indigo-600">
-                RMSE {fov.rmse_before.toFixed(2)}m → {fov.rmse_after.toFixed(2)}m · {fov.n_points} pts
-                (ortogonal)
-              </div>
-              <div className="text-indigo-400 mt-0.5">
-                Aproximación de 1er orden y relativa a la escala actual: punto de partida, no
-                calibración final. Los puntos ya tomados NO se recalculan.
-              </div>
             </div>
           )}
 

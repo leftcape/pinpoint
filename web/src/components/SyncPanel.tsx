@@ -1,6 +1,6 @@
 import { useStore } from '../store'
 import type { SyncMethod } from '../api'
-import { applyFovScale, fovVerticalFrom } from '../api'
+import { fovVerticalFrom } from '../api'
 import { VideoControls } from './VideoControls'
 
 const METHODS: { value: SyncMethod; label: string; hint: string }[] = [
@@ -119,25 +119,16 @@ export function SyncPanel() {
       {/* Fine tuning: manual deltas to calibrate against the orthophoto */}
       <div className="flex flex-col gap-2 border-t pt-2">
         <div className="text-xs text-gray-500">
-          Fine tuning (optics / attitude) — calibrate against the orthophoto. Set
-          the FOV itself in “Calibrar FOV por escala” (Location):
+          Fine tuning (attitude) — calibrate against the orthophoto. Set the FOV in
+          “Calibrar FOV por escala” (Location):
         </div>
         <div className="text-[11px] text-gray-500">
           FOV{' '}
           <b className="font-mono">
-            {applyFovScale(tuning.fov_h, tuning.fov_scale).toFixed(1)}° ×{' '}
-            {applyFovScale(fovVerticalFrom(tuning.fov_h, tuning.aspect), tuning.fov_scale).toFixed(1)}°
+            {tuning.fov_h.toFixed(1)}° × {fovVerticalFrom(tuning.fov_h, tuning.aspect).toFixed(1)}°
           </b>{' '}
-          (nominal {tuning.fov_h.toFixed(1)}° · aspect {tuning.aspect.toFixed(3)})
+          (aspect {tuning.aspect.toFixed(3)})
         </div>
-        <TuneSlider
-          label={`FOV fine scale × ${tuning.fov_scale.toFixed(2)}`}
-          min={0.8}
-          max={1.3}
-          step={0.005}
-          value={tuning.fov_scale}
-          onChange={(v) => setTuning('fov_scale', v)}
-        />
         <TuneSlider
           label={`Δ pitch: ${tuning.d_pitch.toFixed(1)}°`}
           min={-20}
