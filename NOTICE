@@ -1,0 +1,28 @@
+PinPoint
+Copyright (c) 2026 LeftCape
+
+Este software se ha desarrollado con la ayuda de la empresa LeftCape, que ha
+puesto los medios. Los derechos de explotación pertenecen a LeftCape.
+
+LICENCIAS
+---------
+- Código fuente (pinpoint_core/, server/, web/): PolyForm Noncommercial License
+  1.0.0 — uso permitido para cualquier fin NO comercial (investigación,
+  educación, uso personal, organizaciones sin ánimo de lucro). Ver LICENSE.
+- Documentación, figuras y datos de ejemplo (docs/, data/): Creative Commons
+  Attribution-NonCommercial 4.0 (CC BY-NC 4.0). Ver LICENSE-docs.
+
+El uso COMERCIAL requiere autorización expresa de LeftCape.
+
+PENDIENTE DE REVISIÓN LEGAL
+---------------------------
+La elección de licencias no comerciales tiene matices ("no comercial" es un
+término con fronteras difusas: universidades privadas, ONGs con financiación,
+etc.). Antes de la publicación definitiva del repositorio y del paper, LeftCape
+debe revisar con asesoría legal que estas licencias reflejan exactamente lo que
+se quiere permitir y restringir.
+
+ORIGEN DEL CÓDIGO
+-----------------
+El núcleo de proyección procede del proyecto interno `geosync`, copiado y
+congelado el 2026-07-16. Ver FROZEN.md.

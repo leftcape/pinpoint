@@ -1,0 +1,11 @@
+# PinPoint — núcleo + servidor.
+# El núcleo (pinpoint_core/) solo necesita pymavlink; ffmpeg/ffprobe son
+# binarios del sistema.
+
+# Parseo de logs ArduPilot .bin
+pymavlink>=2.4.40
+
+# Servidor
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6   # subida de ficheros (UploadFile)

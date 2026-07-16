@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; }
+
+/* En la miniatura del mapa (PiP) ocultamos los controles de MapLibre
+   (atribución del IGN y el botón de info) para que no tapen el mapa. */
+.map-mini .maplibregl-control-container { display: none; }

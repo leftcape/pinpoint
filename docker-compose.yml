@@ -1,0 +1,25 @@
+# PinPoint — servicio web para georreferenciar un punto de vídeo aéreo al
+# instante (respuesta rápida en emergencia).
+#
+# Config en el .env de esta carpeta (ver .env.example).
+#   docker compose up -d --build
+#   http://IP:${PINPOINT_PORT}
+
+services:
+  pinpoint:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${PINPOINT_CONTAINER_NAME:-pinpoint}
+    restart: unless-stopped
+    ports:
+      - "${PINPOINT_PORT:-8096}:8000"
+    volumes:
+      # datos de trabajo: fuentes registradas/subidas (bin + vídeo)
+      - ${PINPOINT_DATA_HOST:-./pinpoint-data}:/pinpoint-data
+      # carpeta de vuelos del servidor (.bin + vídeos), SOLO LECTURA. Se monta
+      # en la MISMA ruta que en el host para que el modo "Ruta en servidor"
+      # acepte rutas absolutas tal cual (p.ej. /mnt/data/srv/...).
+      - ${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}:${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}:ro
+    environment:
+      - PINPOINT_DATA=/pinpoint-data

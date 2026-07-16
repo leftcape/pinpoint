@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / front
+web/node_modules/
+web/dist/
+
+# Datos de trabajo (no versionar: pesados y locales)
+pinpoint-data/
+*.bin
+*.BIN
+*.mkv
+*.mp4
+
+# Sistema
+.DS_Store
+.env
+
+# artefacto de build de TS
+web/tsconfig.tsbuildinfo

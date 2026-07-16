@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "PinPoint: georreferenciación inmediata de puntos en vídeo aéreo para respuesta a emergencias"
+message: "Si usas este software, cítalo así."
+type: software
+authors:
+  - family-names: Izquierdo
+    given-names: Luis
+    affiliation: LeftCape
+version: 0.1.0
+date-released: "2026-07-16"
+license: PolyForm-Noncommercial-1.0.0
+repository-code: "https://github.com/leftcape/pinpoint"
+abstract: >-
+  PinPoint georreferencia al instante un punto señalado en el vídeo de un dron,
+  usando únicamente el vídeo y su log de vuelo de ArduPilot (.bin), sin necesidad
+  de procesamiento fotogramétrico previo. Está pensado para respuesta rápida en
+  situaciones de desastre. Este repositorio acompaña un artículo que valida el
+  método y acota su error en función de la distancia al centro de imagen y las
+  condiciones de vuelo.
+keywords:
+  - georreferenciación
+  - vídeo aéreo
+  - drones
+  - respuesta a emergencias
+  - fotogrametría
+  - ArduPilot
