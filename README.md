@@ -13,10 +13,10 @@ y hacia dónde miraba a partir del log de ArduPilot (`.bin`).
 Este repositorio acompaña un artículo que **valida el método y acota su error**
 en función de la distancia al centro de la imagen y las condiciones de vuelo.
 
-> **Estado: v0.1.0 — versión sin modelo del terreno (MDT).** La proyección asume
-> terreno plano a la cota del despegue. La siguiente versión incorporará el
-> modelo digital del terreno (IGN para España, SRTM para el resto del mundo) para
-> corregir el desnivel. Ver [Hoja de ruta](#hoja-de-ruta).
+> **Estado: v0.2.0 — con modelo del terreno (MDT).** El AGL se corrige con la
+> cota real del terreno bajo el dron: **IGN 5 m** para España, **Copernicus DEM
+> 90 m** para el resto del mundo, o **plano** (cota del despegue) como en v0.1.0.
+> Elegible en la interfaz para comparar. Ver [Modelo del terreno](#modelo-del-terreno).
 
 ---
 
@@ -114,23 +114,48 @@ de recoger una campaña seria hay que **calibrar el `fov_scale`**: la propia
 herramienta lo sugiere a partir de los puntos tomados. Toma primero unos puntos
 en un frame con **roll bajo** (|roll| < 0,5°) para aislar el FOV.
 
-> **Ojo con el terreno.** En la v0.1.0 (sin MDT) el error radial mezcla la lente
-> con el desnivel del terreno, porque el AGL se calcula con la cota del despegue.
-> Calibra sobre tramos donde el terreno esté a esa cota. La v0.2.0 (MDT) elimina
-> esta limitación.
+> **Terreno.** Con el MDT activado (IGN o Copernicus), el AGL usa la cota real
+> del terreno, así que el error radial ya no mezcla la lente con el desnivel y
+> puedes calibrar en cualquier frame. Con `flat` (v0.1.0) calibra solo sobre
+> tramos llanos. Ver abajo.
+
+---
+
+## Modelo del terreno
+
+La proyección necesita el AGL (altura del dron sobre el suelo). Tres modelos,
+elegibles en el panel de puntos de control para **comparar**:
+
+| Modelo | Cobertura | Resolución | Fuente |
+|--------|-----------|-----------|--------|
+| **Plano** | universal | — | cota del despegue (asume terreno llano) |
+| **IGN 5m** | España | 5 m | MDT del IGN (WCS, sin login) |
+| **Copernicus 90m** | mundial | 90 m | Copernicus DEM (bucket abierto de AWS, sin login) |
+
+El ráster se descarga **una vez** para el bounding box del vuelo y se cachea; los
+puntos se muestrean en memoria. Si la fuente no cubre la zona o falla la red, se
+degrada a plano automáticamente y el panel muestra la fuente **efectiva**.
+
+Datum: todas las fuentes y el `GPS.Alt` de ArduPilot son ortométricas (sobre el
+nivel del mar), así que `AGL = altitud_dron − cota` directamente, **sin
+corrección de geoide** (el receptor GNSS ya la aplica; se verificó que el desfase
+observado no era del geoide).
+
+Limitación conocida (v0.2.0): se usa la cota **bajo el dron**, no bajo el píxel
+proyectado. Corrige el grueso del sesgo por relieve; el ray-cast contra terreno
+inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
 
 ---
 
 ## Hoja de ruta
 
-- **v0.1.0 (actual)** — proyección con terreno plano. Herramienta de puntos de
-  control y exportación de campaña. Validado end-to-end.
-- **v0.2.0 — modelo del terreno (MDT).** AGL real por punto: IGN (5 m) para
-  España, SRTM (30 m) para el resto del mundo, plano como último recurso. Incluye
-  la corrección geoide→elipsoide de SRTM (EGM96 vs WGS84). Separa la distorsión de
-  la lente del desnivel del terreno; permite calibrar y tomar puntos en cualquier
-  frame.
-- **Paper** — redacción en `docs/`, con dataset de ejemplo citable (DOI).
+- **v0.1.0** — proyección con terreno plano. Herramienta de puntos de control y
+  exportación de campaña. Validado end-to-end.
+- **v0.2.0 (actual)** — modelo del terreno: IGN 5 m (España) y Copernicus DEM
+  90 m (mundial), elegibles para comparar, con degradación a plano. AGL real bajo
+  el dron; sin corrección de geoide (todo ortométrico). `terrain_source` en el CSV.
+- **Siguiente** — ray-cast del píxel contra el terreno inclinado (cota bajo el
+  punto, no bajo el dron); dataset de ejemplo citable (DOI) y redacción del paper.
 
 ---
 

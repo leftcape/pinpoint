@@ -51,6 +51,7 @@ export interface FrameTelemetry {
   d_roll: number
   sync_method: string
   sync_offset: number
+  terrain_source: string // modelo del terreno usado para el AGL: flat | ign | cop
 }
 
 export interface GcpPoint {
@@ -174,7 +175,7 @@ const CSV_COLUMNS = [
   'ortho_lat', 'ortho_lng', 'err_ortho_x_m', 'err_ortho_y_m', 'err_ortho_m',
   'att_lat', 'att_lng', 'err_att_x_m', 'err_att_y_m', 'err_att_m',
   'fov_scale', 'd_pitch', 'd_roll', 'map_zoom',
-  'has_gimbal', 'nadir_ok', 'reason', 'sync_method', 'sync_offset_s',
+  'has_gimbal', 'nadir_ok', 'reason', 'sync_method', 'sync_offset_s', 'terrain_source',
 ]
 
 const n = (v: number | undefined | null, d = 6): string =>
@@ -204,7 +205,7 @@ export function campaignToCsv(c: GcpCampaign): string {
         n(p.attitude?.lat, 8), n(p.attitude?.lng, 8),
         n(p.err_attitude?.x, 3), n(p.err_attitude?.y, 3), n(p.err_attitude?.direct, 3),
         n(t.fov_scale, 4), n(t.d_pitch, 3), n(t.d_roll, 3), n(p.map_zoom, 2),
-        t.has_gimbal ? '1' : '0', t.nadir_ok ? '1' : '0', q(t.reason), q(t.sync_method), n(t.sync_offset, 3),
+        t.has_gimbal ? '1' : '0', t.nadir_ok ? '1' : '0', q(t.reason), q(t.sync_method), n(t.sync_offset, 3), q(t.terrain_source || 'flat'),
       ].join(','))
     }
   }

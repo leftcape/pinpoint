@@ -24,4 +24,4 @@ Se dejó FUERA a propósito lo que era específico de la reconstrucción con Web
 proyecta puntos al instante, no genera datasets de frames para fotogrametría.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

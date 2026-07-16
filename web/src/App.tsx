@@ -3,11 +3,10 @@ import { useStore } from './store'
 import { MapView } from './components/MapView'
 import { VideoPanel } from './components/VideoPanel'
 import { SyncPanel } from './components/SyncPanel'
-import { ParamsPanel } from './components/ParamsPanel'
 import { LocationPanel } from './components/LocationPanel'
 import { SourcePicker } from './components/SourcePicker'
 
-type Tab = 'flight' | 'location' | 'extract'
+type Tab = 'flight' | 'location'
 
 export function App() {
   const sourceId = useStore((s) => s.sourceId)
@@ -71,9 +70,6 @@ export function App() {
             <TabButton active={tab === 'location'} onClick={() => setTab('location')}>
               Location
             </TabButton>
-            <TabButton active={tab === 'extract'} onClick={() => setTab('extract')}>
-              Extraction
-            </TabButton>
           </div>
 
           {/* All tabs stay mounted; inactive ones hidden to preserve state. */}
@@ -83,9 +79,6 @@ export function App() {
             </div>
             <div className={tab === 'location' ? 'block' : 'hidden'}>
               <LocationPanel />
-            </div>
-            <div className={tab === 'extract' ? 'block' : 'hidden'}>
-              <ParamsPanel />
             </div>
           </div>
         </aside>

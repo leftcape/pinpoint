@@ -23,7 +23,7 @@ import os
 import re
 import shutil
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Form
@@ -36,13 +36,14 @@ from pinpoint_core import binlog as _binlog
 from pinpoint_core import video as _video
 from pinpoint_core import sync as _sync
 from pinpoint_core import footprint as _footprint
+from pinpoint_core import terrain as _terrain
 
 # --- almacenamiento ---
 DATA_DIR = Path(os.environ.get("PINPOINT_DATA", "/pinpoint-data")).resolve()
 SOURCES_DIR = DATA_DIR / "sources"
 SOURCES_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="PinPoint", version="0.1.0")
+app = FastAPI(title="PinPoint", version="0.2.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
@@ -56,11 +57,24 @@ class Source:
     video_path: str
     # caché perezosa del log parseado (parsear es caro)
     _log: _binlog.BinLog | None = None
+    # caché de modelos de terreno por fuente pedida ("ign"|"cop"|"flat"): el
+    # ráster se descarga UNA VEZ por fuente y se reutiliza en cada proyección.
+    _terrain: dict = field(default_factory=dict)
 
     def log(self) -> _binlog.BinLog:
         if self._log is None:
             self._log = _binlog.parse_bin(self.bin_path)
         return self._log
+
+    def terrain(self, source: str) -> tuple[object, str]:
+        """Devuelve (modelo, fuente_efectiva) para la fuente pedida, cacheado.
+        La fuente efectiva puede degradar a 'flat' (fuera de cobertura o fallo)."""
+        if source not in self._terrain:
+            log = self.log()
+            min_lat, min_lng, max_lat, max_lng = log.bbox()
+            bbox = _terrain.BBox(min_lat, min_lng, max_lat, max_lng)
+            self._terrain[source] = _terrain.load_terrain(source, bbox, ground_msl=log.alt0)
+        return self._terrain[source]
 
 
 SOURCES: dict[str, Source] = {}
@@ -72,6 +86,28 @@ def _get_source(sid: str) -> Source:
     if s is None:
         raise HTTPException(404, f"source {sid} no encontrada")
     return s
+
+
+def _ground_under_drone(s: Source, sr, tv: float, terrain: str) -> tuple[float | None, str]:
+    """Cota del terreno (MSL) bajo la posición del dron en el instante tv, según
+    el modelo pedido. Devuelve (cota | None, fuente_efectiva).
+
+    None => que la proyección use su valor por defecto (la cota del despegue),
+    es decir, terreno plano. Se usa la cota BAJO EL DRON (no bajo el píxel): es
+    una aproximación de primer orden que corrige el grueso del sesgo por relieve;
+    el ray-cast contra terreno inclinado queda para más adelante."""
+    if terrain == "flat":
+        return None, "flat"
+    log = s.log()
+    model, eff = s.terrain(terrain)
+    if eff == "flat":
+        return None, "flat"
+    t_log = log.t0_us + sr.video_start_trel + tv
+    lat, lng, _alt = log.interp_position(t_log)
+    z = model.elevation(lat, lng)
+    if z is None:
+        return None, "flat"   # punto fuera del ráster -> plano
+    return z, eff
 
 
 # ======================= endpoints =======================
@@ -245,6 +281,7 @@ def source_footprint(
     fov_scale: float = Query(1.0, description="factor sobre tan(FOV/2) — gran angular: ~1.25 según la distorsión Brown de ODM"),
     d_pitch: float = Query(0.0, description="delta manual de cabeceo (grados)"),
     d_roll: float = Query(0.0, description="delta manual de alabeo (grados)"),
+    terrain: str = Query("flat", description="modelo del terreno: flat | ign | srtm"),
 ):
     """Footprint del frame sobre el suelo en el instante tv: 4 esquinas lat/lng.
     El front lo usa para pegar el frame en el mapa (MapLibre image source).
@@ -252,7 +289,9 @@ def source_footprint(
     Devuelve nadir_ok=False (con 'reason') si la cámara está demasiado oblicua o
     baja para que la proyección plana sea fiable -> el front no pinta la imagen.
 
-    Fase actual: terreno plano (altura sobre el punto de despegue)."""
+    El AGL usa el modelo del terreno pedido (flat = cota del despegue; ign/srtm =
+    cota real bajo el dron). La fuente EFECTIVA se devuelve en 'terrain_source'
+    (puede degradar a flat fuera de cobertura)."""
     s = _get_source(sid)
     log = s.log()
     if method == "takeoff":
@@ -271,12 +310,16 @@ def source_footprint(
         fov_h = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_h / 2))))
         fov_v = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_v / 2))))
 
+    ground_msl, terrain_eff = _ground_under_drone(s, sr, tv, terrain)
+
     fp = _footprint.compute_footprint(
         log, sr, tv, fov_h=fov_h, fov_v=fov_v,
         max_pitch_dev=max_pitch_dev, max_roll_dev=max_roll_dev, min_agl=min_agl,
         pitch_offset=d_pitch, roll_offset=d_roll,
+        ground_alt_msl=ground_msl,
     )
     return {
+        "terrain_source": terrain_eff,
         "tv": fp.tv,
         "valid": fp.valid,
         "nadir_ok": fp.nadir_ok,
@@ -313,12 +356,16 @@ def source_project_point(
     d_pitch: float = Query(0.0),
     d_roll: float = Query(0.0),
     ortho: bool = Query(False, description="cancelar la actitud: pinhole nadir puro (línea base)"),
+    terrain: str = Query("flat", description="modelo del terreno: flat | ign | cop"),
 ):
     """Proyecta un píxel marcado en la foto al suelo (lat/lng), con la misma
     geometría de actitud completa que el contorno. Para el modo 'marcar punto'.
 
     ortho=True devuelve la proyección SIN actitud (nadir perfecto, mismo yaw/AGL/
-    FOV): la geometría del rectángulo que pinta "Project the frame image"."""
+    FOV): la geometría del rectángulo que pinta "Project the frame image".
+
+    terrain elige el modelo del terreno para el AGL (flat = cota del despegue;
+    ign/cop = cota real bajo el dron). La fuente efectiva va en 'terrain_source'."""
     import math as _math
     s = _get_source(sid)
     log = s.log()
@@ -335,11 +382,14 @@ def source_project_point(
         fov_h = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_h / 2))))
         fov_v = 2 * _math.degrees(_math.atan(fov_scale * _math.tan(_math.radians(fov_v / 2))))
 
+    ground_msl, terrain_eff = _ground_under_drone(s, sr, tv, terrain)
+
     r = _footprint.project_pixel(
         log, sr, tv, px, py, img_w, img_h,
         fov_h=fov_h, fov_v=fov_v, pitch_offset=d_pitch, roll_offset=d_roll,
-        ortho=ortho,
+        ortho=ortho, ground_alt_msl=ground_msl,
     )
+    r["terrain_source"] = terrain_eff
     return r
 
 

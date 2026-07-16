@@ -9,3 +9,8 @@ pymavlink>=2.4.40
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6   # subida de ficheros (UploadFile)
+
+# Modelo del terreno (MDT): lee GeoTIFF del IGN (WCS) y COG de Copernicus
+# (vsicurl). rasterio trae GDAL embebido en las ruedas de PyPI.
+rasterio>=1.3
+numpy>=1.24

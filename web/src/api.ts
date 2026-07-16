@@ -51,6 +51,7 @@ export interface Footprint {
   corners: [number, number][] // rectángulo nadir (para la imagen) [lng,lat]
   outline_corners: [number, number][] // silueta/trapecio real (para el contorno) [lng,lat]
   has_gimbal: boolean
+  terrain_source?: string // fuente de terreno EFECTIVA usada para el AGL
 }
 
 export interface NadirThresholds {
@@ -67,16 +68,10 @@ export interface AngleTuning {
 
 export type SyncMethod = 'takeoff' | 'creation_time' | 'manual'
 
-export interface JobStatus {
-  id: string
-  status: 'pending' | 'running' | 'done' | 'error'
-  stage: string
-  pct: number
-  msg: string
-  result: Record<string, unknown> | null
-  error: string | null
-  out_dir: string
-}
+// Modelo del terreno para el AGL. 'flat' = cota del despegue (v0.1.0);
+// 'ign' = MDT 5m España; 'cop' = Copernicus DEM 90m mundial.
+export type TerrainSource = 'flat' | 'ign' | 'cop'
+
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`)
@@ -125,6 +120,7 @@ export const api = {
     offset = 0,
     thr?: NadirThresholds,
     tuning?: AngleTuning,
+    terrain: TerrainSource = 'flat',
   ) {
     const p = new URLSearchParams({ tv: String(tv), method, offset: String(offset) })
     if (thr) {
@@ -137,6 +133,7 @@ export const api = {
       p.set('d_pitch', String(tuning.d_pitch))
       p.set('d_roll', String(tuning.d_roll))
     }
+    p.set('terrain', terrain)
     return j<Footprint>(await fetch(`/api/sources/${sid}/footprint?${p}`))
   },
 
@@ -151,6 +148,7 @@ export const api = {
     offset = 0,
     tuning?: AngleTuning,
     ortho = false, // true: pinhole nadir puro (sin actitud) — línea base del muestreo
+    terrain: TerrainSource = 'flat',
   ) {
     const p = new URLSearchParams({
       tv: String(tv),
@@ -167,26 +165,9 @@ export const api = {
       p.set('d_roll', String(tuning.d_roll))
     }
     if (ortho) p.set('ortho', 'true')
-    return j<{ lat: number; lng: number; clipped: boolean; valid: boolean }>(
+    p.set('terrain', terrain)
+    return j<{ lat: number; lng: number; clipped: boolean; valid: boolean; terrain_source?: string }>(
       await fetch(`/api/sources/${sid}/project_point?${p}`),
     )
-  },
-
-  async createJob(body: Record<string, unknown>) {
-    return j<{ job_id: string }>(
-      await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    )
-  },
-
-  async job(jobId: string) {
-    return j<JobStatus>(await fetch(`/api/jobs/${jobId}`))
-  },
-
-  downloadUrl(jobId: string) {
-    return `/api/jobs/${jobId}/download`
   },
 }

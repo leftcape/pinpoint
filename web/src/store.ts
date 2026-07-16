@@ -8,6 +8,7 @@ import {
   type NadirThresholds,
   type AngleTuning,
   type SyncMethod,
+  type TerrainSource,
 } from './api'
 import {
   decompose,
@@ -20,15 +21,6 @@ import {
   type GcpPoint,
   type LngLat,
 } from './sampler/gcp'
-
-interface Params {
-  fps: number
-  quality: number
-  min_alt_rel: number
-  crs: string
-  include_orientation: boolean
-  prefix: string
-}
 
 interface State {
   sourceId: string | null
@@ -81,12 +73,8 @@ interface State {
   gcpBusy: boolean // proyectando en el backend
   nadirThr: NadirThresholds // umbrales para decidir si proyectar (cenital)
   tuning: AngleTuning // ajuste fino manual: FOV (gran angular) y deltas de ángulos
-
-  params: Params
-
-  // job en curso
-  jobId: string | null
-  jobStatus: import('./api').JobStatus | null
+  terrain: TerrainSource // modelo del terreno para el AGL: flat | ign | cop
+  terrainEffective: TerrainSource | null // la fuente que el backend usó de verdad
 
   // acciones
   registerSource: (bin: string, video: string) => Promise<void>
@@ -128,9 +116,7 @@ interface State {
   gcpResetCampaign: () => void
   setNadirThr: <K extends keyof NadirThresholds>(k: K, v: number) => void
   setTuning: <K extends keyof AngleTuning>(k: K, v: number) => void
-  setParam: <K extends keyof Params>(k: K, v: Params[K]) => void
-  launchJob: () => Promise<void>
-  pollJob: () => Promise<void>
+  setTerrain: (t: TerrainSource) => void
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -168,16 +154,8 @@ export const useStore = create<State>((set, get) => ({
   gcpStorageFull: false,
   nadirThr: { max_pitch_dev: 15, max_roll_dev: 10, min_agl: 20 },
   tuning: { fov_scale: 1.0, d_pitch: 0, d_roll: 0 },
-  params: {
-    fps: 2,
-    quality: 2,
-    min_alt_rel: 20,
-    crs: 'EPSG:4326',
-    include_orientation: true,
-    prefix: 'frame',
-  },
-  jobId: null,
-  jobStatus: null,
+  terrain: 'flat',
+  terrainEffective: null,
 
   async registerSource(bin, video) {
     set({ loading: true, error: null })
@@ -342,11 +320,11 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async refreshFootprint() {
-    const { sourceId, currentTv, syncMethod, manualOffset, nadirThr, tuning } = get()
+    const { sourceId, currentTv, syncMethod, manualOffset, nadirThr, tuning, terrain } = get()
     if (!sourceId) return
     try {
-      const fp = await api.footprint(sourceId, currentTv, syncMethod, manualOffset, nadirThr, tuning)
-      set({ footprint: fp })
+      const fp = await api.footprint(sourceId, currentTv, syncMethod, manualOffset, nadirThr, tuning, terrain)
+      set({ footprint: fp, terrainEffective: (fp.terrain_source as TerrainSource) ?? null })
     } catch (e) {
       set({ error: String(e) })
     }
@@ -418,9 +396,9 @@ export const useStore = create<State>((set, get) => ({
       // distintos si el usuario ha estado moviendo el vídeo.
       const [pos, fp, orthoR, attR] = await Promise.all([
         api.position(s.sourceId, tv, s.syncMethod, s.manualOffset),
-        api.footprint(s.sourceId, tv, s.syncMethod, s.manualOffset, s.nadirThr, s.tuning),
-        api.projectPoint(s.sourceId, tv, px, py, imgW, imgH, s.syncMethod, s.manualOffset, s.tuning, true),
-        api.projectPoint(s.sourceId, tv, px, py, imgW, imgH, s.syncMethod, s.manualOffset, s.tuning, false),
+        api.footprint(s.sourceId, tv, s.syncMethod, s.manualOffset, s.nadirThr, s.tuning, s.terrain),
+        api.projectPoint(s.sourceId, tv, px, py, imgW, imgH, s.syncMethod, s.manualOffset, s.tuning, true, s.terrain),
+        api.projectPoint(s.sourceId, tv, px, py, imgW, imgH, s.syncMethod, s.manualOffset, s.tuning, false, s.terrain),
       ])
       const ortho: LngLat | null = orthoR.valid ? { lng: orthoR.lng, lat: orthoR.lat } : null
       const attitude: LngLat | null = attR.valid ? { lng: attR.lng, lat: attR.lat } : null
@@ -475,6 +453,7 @@ export const useStore = create<State>((set, get) => ({
             d_roll: s.tuning.d_roll,
             sync_method: s.syncMethod,
             sync_offset: s.manualOffset,
+            terrain_source: (fp.terrain_source as string) ?? 'flat',
           },
           points: [],
         })
@@ -549,36 +528,10 @@ export const useStore = create<State>((set, get) => ({
     if (get().projectFrame || get().showOutline || get().obliqueProject) get().refreshFootprint()
   },
 
-  setParam(k, v) {
-    set({ params: { ...get().params, [k]: v } })
-  },
-
-  async launchJob() {
-    const { sourceId, params, syncMethod, manualOffset } = get()
-    if (!sourceId) return
-    set({ error: null })
-    try {
-      const { job_id } = await api.createJob({
-        source_id: sourceId,
-        ...params,
-        sync_method: syncMethod,
-        manual_offset_s: manualOffset,
-      })
-      set({ jobId: job_id, jobStatus: null })
-      get().pollJob()
-    } catch (e) {
-      set({ error: String(e) })
-    }
-  },
-
-  async pollJob() {
-    const { jobId } = get()
-    if (!jobId) return
-    const status = await api.job(jobId)
-    set({ jobStatus: status })
-    if (status.status === 'running' || status.status === 'pending') {
-      setTimeout(() => get().pollJob(), 800)
-    }
+  setTerrain(t) {
+    set({ terrain: t })
+    // refrescar el footprint para que el AGL (y la fuente efectiva) se actualicen
+    if (get().sourceId) get().refreshFootprint()
   },
 }))
 

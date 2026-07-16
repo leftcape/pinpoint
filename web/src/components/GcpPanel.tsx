@@ -11,6 +11,9 @@ export function GcpPanel() {
   const marking = useStore((s) => s.gcpMarking)
   const startMarking = useStore((s) => s.gcpStartMarking)
   const stopMarking = useStore((s) => s.gcpStopMarking)
+  const terrain = useStore((s) => s.terrain)
+  const terrainEffective = useStore((s) => s.terrainEffective)
+  const setTerrain = useStore((s) => s.setTerrain)
   const campaign = useStore((s) => s.gcpCampaign)
   const pending = useStore((s) => s.gcpPendingPixel)
   const busy = useStore((s) => s.gcpBusy)
@@ -58,6 +61,41 @@ export function GcpPanel() {
 
       {gcpMode && (
         <>
+          {/* modelo del terreno para el AGL — se puede cambiar para comparar */}
+          <div className="flex flex-col gap-1 rounded p-2 border bg-slate-50">
+            <div className="text-xs font-semibold text-slate-600">Modelo del terreno (AGL)</div>
+            <div className="flex gap-1">
+              {(
+                [
+                  ['flat', 'Plano'],
+                  ['ign', 'IGN 5m'],
+                  ['cop', 'Copernicus 90m'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTerrain(key)}
+                  className={`flex-1 px-1.5 py-1 text-xs rounded border ${
+                    terrain === key
+                      ? 'bg-slate-700 text-white border-slate-700'
+                      : 'bg-white text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {terrain === 'flat'
+                ? 'Terreno plano a la cota del despegue (sin corregir el relieve).'
+                : terrainEffective && terrainEffective !== terrain
+                  ? `⚠ Fuera de cobertura: se está usando "${terrainEffective}".`
+                  : terrain === 'ign'
+                    ? 'MDT 5 m del IGN (solo España).'
+                    : 'Copernicus DEM 90 m (mundial, sin login).'}
+            </div>
+          </div>
+
           {!marking ? (
             <div className="flex flex-col gap-2">
               <div className="text-xs rounded p-2 border bg-gray-50 text-gray-600">
