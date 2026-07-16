@@ -3,7 +3,7 @@ title: "PinPoint: georreferenciación inmediata de puntos en vídeo aéreo para 
 message: "Si usas este software, cítalo así."
 type: software
 authors:
-  - family-names: Izquierdo
+  - family-names: Izquierdo Mesa
     given-names: Luis
     affiliation: LeftCape
 version: 0.2.0
