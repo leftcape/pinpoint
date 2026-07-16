@@ -38,6 +38,11 @@ interface State {
   videoEl: HTMLVideoElement | null // el <video> real, pilotable desde cualquier panel
   position: Position | null // dónde está el dron en currentTv
 
+  // calibración de FOV por escala (PASO 0, previo a los GCP): un solo grado de
+  // libertad (el FOV); la huella queda clavada al nadir del dron y solo escala;
+  // la foto se pinta encima del plano y se ajusta hasta que casa en escala.
+  fovCalibMode: boolean
+
   // proyección del frame en el mapa
   projectFrame: boolean // pintar la IMAGEN del frame (solo si es cenital)
   showOutline: boolean // pintar el CONTORNO del footprint (independiente)
@@ -89,6 +94,7 @@ interface State {
   videoSeekBy: (delta: number) => void // adelantar/retroceder delta segundos
   videoTogglePlay: () => void
   refreshPosition: () => Promise<void>
+  setFovCalibMode: (on: boolean) => void
   setProjectFrame: (on: boolean) => void
   setShowOutline: (on: boolean) => void
   setObliqueProject: (on: boolean) => void
@@ -132,6 +138,7 @@ export const useStore = create<State>((set, get) => ({
   videoPlaying: false,
   videoEl: null,
   position: null,
+  fovCalibMode: false,
   projectFrame: false,
   showOutline: false,
   obliqueProject: false,
@@ -243,6 +250,23 @@ export const useStore = create<State>((set, get) => ({
       }
     } catch (e) {
       set({ error: String(e) })
+    }
+  },
+
+  setFovCalibMode(on) {
+    if (on) {
+      // paso 0: mapa grande (para ver el encaje), foto proyectada encima del
+      // plano, vídeo pausado en el frame que se calibra. La huella nadir ya
+      // escala con tuning.fov_scale, así que el slider de FOV mueve la escala.
+      get().videoEl?.pause()
+      set({ fovCalibMode: on, projectFrame: true, obliqueProject: false, swapView: false })
+      get().refreshFootprint()
+    } else {
+      set({ fovCalibMode: on })
+      // al salir dejamos la proyección encendida solo si el usuario ya la tenía
+      // por su cuenta; aquí simplemente apagamos la que encendimos nosotros.
+      set({ projectFrame: false })
+      if (!get().showOutline && !get().obliqueProject) set({ footprint: null })
     }
   },
 

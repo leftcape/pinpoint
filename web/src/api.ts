@@ -66,6 +66,26 @@ export interface AngleTuning {
   d_roll: number // delta manual de alabeo (grados)
 }
 
+// FOV nominal de la cámara (grados), el mismo valor por defecto que asume el
+// backend en /footprint y /project_point. Se deriva de la focal que OpenSFM
+// ajustó al reconstruir el vuelo de referencia (focal_x=0.6849) — NO es una
+// calibración de laboratorio, por eso se afina con fov_scale contra verdad-
+// terreno. El front lo necesita para traducir fov_scale a grados efectivos:
+//   fov_eff = 2·atan(fov_scale · tan(fov_nominal/2))
+export const FOV_BASE = { h: 72.3, v: 44.6 } as const
+
+// grados efectivos de FOV para un fov_scale dado (corrección en espacio tangente)
+export function fovEffective(fovNominalDeg: number, fovScale: number): number {
+  const t = fovScale * Math.tan((fovNominalDeg * Math.PI) / 360)
+  return (2 * Math.atan(t) * 180) / Math.PI
+}
+
+// fov_scale que produce unos grados efectivos dados (inverso de fovEffective) —
+// para que el slider pueda operar en grados y guardar el factor por debajo
+export function fovScaleForEffective(fovNominalDeg: number, fovEffDeg: number): number {
+  return Math.tan((fovEffDeg * Math.PI) / 360) / Math.tan((fovNominalDeg * Math.PI) / 360)
+}
+
 export type SyncMethod = 'takeoff' | 'creation_time' | 'manual'
 
 // Modelo del terreno para el AGL. 'flat' = cota del despegue (v0.1.0);

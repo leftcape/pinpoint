@@ -8,6 +8,7 @@ import { exportCampaign } from '../sampler/exportCampaign'
 export function GcpPanel() {
   const gcpMode = useStore((s) => s.gcpMode)
   const setGcpMode = useStore((s) => s.setGcpMode)
+  const fovCalibMode = useStore((s) => s.fovCalibMode)
   const marking = useStore((s) => s.gcpMarking)
   const startMarking = useStore((s) => s.gcpStartMarking)
   const stopMarking = useStore((s) => s.gcpStopMarking)
@@ -55,9 +56,19 @@ export function GcpPanel() {
   return (
     <div className="flex flex-col gap-2 border-t pt-2">
       <label className="flex items-center gap-2 text-sm font-semibold">
-        <input type="checkbox" checked={gcpMode} onChange={(e) => setGcpMode(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={gcpMode}
+          onChange={(e) => setGcpMode(e.target.checked)}
+          disabled={fovCalibMode}
+        />
         Ground control points (paper)
       </label>
+      {fovCalibMode && !gcpMode && (
+        <div className="text-[11px] text-gray-400 italic">
+          Fija primero el FOV (paso 0) y sal de la calibración.
+        </div>
+      )}
 
       {gcpMode && (
         <>

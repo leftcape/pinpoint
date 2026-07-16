@@ -1,4 +1,5 @@
 import { useStore } from '../store'
+import { FovCalibPanel } from './FovCalibPanel'
 import { GcpPanel } from './GcpPanel'
 
 // Location tools: swap video/map, follow the drone, and mark a point on the
@@ -125,6 +126,8 @@ export function LocationPanel() {
           </div>
         )}
       </div>
+
+      <FovCalibPanel />
 
       <GcpPanel />
     </div>
