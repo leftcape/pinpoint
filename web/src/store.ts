@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { groundToPixel } from './warp'
 import {
   api,
   type LogPreview,
@@ -78,6 +79,7 @@ interface State {
   projectFrame: boolean // pintar la IMAGEN del frame (solo si es cenital)
   showOutline: boolean // pintar el CONTORNO del footprint (independiente)
   obliqueProject: boolean // deformar la foto a la silueta real (trapecio)
+  photoOpacity: number // 0..1, transparencia de la foto proyectada sobre el mapa
   swapView: boolean // intercambiar grande<->pequeño (mapa/vídeo)
   followDrone: boolean // centrar el mapa en el dron y seguirlo
   measureMode: boolean // herramienta de medir distancias en el mapa
@@ -126,6 +128,7 @@ interface State {
   videoTogglePlay: () => void
   refreshPosition: () => Promise<void>
   setProjectFrame: (on: boolean) => void
+  setPhotoOpacity: (v: number) => void
   setShowOutline: (on: boolean) => void
   setObliqueProject: (on: boolean) => void
   setSwapView: (on: boolean) => void
@@ -159,6 +162,10 @@ interface State {
   gcpStartMarking: () => void // empezar a marcar en el frame actual (activa el overlay)
   gcpStopMarking: () => void // terminar este frame (libera el vídeo para moverse)
   gcpClickPhoto: (px: number, py: number) => void // 1º: click en la foto
+  // 1º alternativo: el mismo primer click, pero dado sobre el MAPA. Con la foto
+  // proyectada encima del plano el rasgo se localiza mejor ahí; se convierte a
+  // píxel con la homografía de la huella y queda idéntico a haber clicado la foto.
+  gcpClickMapFirst: (lng: number, lat: number) => void
   gcpClickMap: (lng: number, lat: number) => Promise<void> // 2º: click en el mapa -> cierra el punto
   gcpCancelPending: () => void
   gcpSelect: (frameId: string, pointId: string) => void
@@ -243,6 +250,7 @@ export const useStore = create<State>((set, get) => {
     projectFrame: false,
     showOutline: false,
     obliqueProject: false,
+    photoOpacity: 0.8,
     swapView: false,
     followDrone: false,
     measureMode: false,
@@ -367,6 +375,10 @@ export const useStore = create<State>((set, get) => {
       } catch (e) {
         set({ error: String(e) })
       }
+    },
+
+    setPhotoOpacity(v) {
+      set({ photoOpacity: Math.min(1, Math.max(0, v)) })
     },
 
     setProjectFrame(on) {
@@ -623,6 +635,37 @@ export const useStore = create<State>((set, get) => {
       videoEl?.pause()
       const tv = videoEl ? videoEl.currentTime : currentTv
       set({ gcpPendingPixel: { px, py, tv }, gcpSelected: null })
+    },
+
+    gcpClickMapFirst(lng, lat) {
+      const { videoEl, currentTv, footprint, video } = get()
+      if (!video) return
+      // El píxel se obtiene con la MISMA homografía que proyecta la foto sobre
+      // el terreno, así que marcar en el plano equivale a marcar en la foto.
+      // El cuadrilátero tiene que ser EL MISMO con el que se está pintando la
+      // foto, o el píxel no correspondería a lo que el ojo ve: silueta real en
+      // modo oblicuo, rectángulo nadir en el normal.
+      // Sin la foto encima del plano este gesto no tiene sentido: no se estaría
+      // viendo el rasgo que se pretende marcar, sólo la ortofoto.
+      if (!get().projectFrame && !get().obliqueProject) {
+        set({ error: t('err.noFootprintForMapPick') })
+        return
+      }
+      const quad = get().obliqueProject
+        ? footprint?.outline_corners
+        : footprint?.corners
+      if (!quad || quad.length !== 4) {
+        set({ error: t('err.noFootprintForMapPick') })
+        return
+      }
+      const hit = groundToPixel(quad as [number, number][], video.width, video.height, lng, lat)
+      if (!hit) {
+        set({ error: t('err.outsidePhoto') })
+        return
+      }
+      videoEl?.pause()
+      const tv = videoEl ? videoEl.currentTime : currentTv
+      set({ gcpPendingPixel: { px: hit.px, py: hit.py, tv }, gcpSelected: null })
     },
 
     gcpCancelPending() {

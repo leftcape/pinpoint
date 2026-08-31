@@ -50,6 +50,7 @@ export function MapView() {
   const projectFrame = useStore((s) => s.projectFrame)
   const showOutline = useStore((s) => s.showOutline)
   const obliqueProject = useStore((s) => s.obliqueProject)
+  const photoOpacity = useStore((s) => s.photoOpacity)
   const followDrone = useStore((s) => s.followDrone)
   const measureMode = useStore((s) => s.measureMode)
   const measureDecompose = useStore((s) => s.measureDecompose)
@@ -64,9 +65,13 @@ export function MapView() {
   const sourceId = useStore((s) => s.sourceId)
   const terrain = useStore((s) => s.terrain)
   const [showDem, setShowDem] = useState(false) // capa MDT visible (hillshade)
+  // retícula de puntería sobre el mapa, en px de pantalla (como la de la foto)
+  const [lens, setLens] = useState<{ x: number; y: number } | null>(null)
   const [demZ, setDemZ] = useState<number | null>(null) // altura bajo el cursor
   const gcpMode = useStore((s) => s.gcpMode)
+  const gcpMarking = useStore((s) => s.gcpMarking)
   const gcpClickMap = useStore((s) => s.gcpClickMap)
+  const gcpClickMapFirst = useStore((s) => s.gcpClickMapFirst)
   const gcpPendingPixel = useStore((s) => s.gcpPendingPixel)
   const gcpCampaign = useStore((s) => s.gcpCampaign)
   const gcpSelected = useStore((s) => s.gcpSelected)
@@ -92,8 +97,8 @@ export function MapView() {
   const measureModeRef = useRef(measureMode)
   measureModeRef.current = measureMode
   // idem para el modo GCP: el click sólo cuenta si hay un píxel esperando pareja
-  const gcpRef = useRef({ mode: gcpMode, pending: gcpPendingPixel, click: gcpClickMap })
-  gcpRef.current = { mode: gcpMode, pending: gcpPendingPixel, click: gcpClickMap }
+  const gcpRef = useRef({ mode: gcpMode, marking: gcpMarking, pending: gcpPendingPixel, click: gcpClickMap, first: gcpClickMapFirst })
+  gcpRef.current = { mode: gcpMode, marking: gcpMarking, pending: gcpPendingPixel, click: gcpClickMap, first: gcpClickMapFirst }
   const fovRef = useRef({ mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap })
   fovRef.current = { mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap }
 
@@ -120,7 +125,11 @@ export function MapView() {
       }
       const g = gcpRef.current
       if (g.mode) {
+        // con un píxel pendiente, este click es la verdad-terreno y cierra el
+        // punto; si no lo hay y estamos marcando, es el PRIMER click, que vale
+        // igual dado sobre el plano (la foto está proyectada encima).
         if (g.pending) g.click(e.lngLat.lng, e.lngLat.lat)
+        else if (g.marking) g.first(e.lngLat.lng, e.lngLat.lat)
         return
       }
       if (measureModeRef.current) {
@@ -240,7 +249,7 @@ export function MapView() {
             id: `${SRC}-layer`,
             type: 'raster',
             source: SRC,
-            paint: { 'raster-opacity': 0.8 },
+            paint: { 'raster-opacity': photoOpacity },
           })
         }
       } else if (!obliqueProject && projectFrame && footprint!.nadir_ok) {
@@ -256,12 +265,21 @@ export function MapView() {
             id: `${SRC}-layer`,
             type: 'raster',
             source: SRC,
-            paint: { 'raster-opacity': 0.75 },
+            paint: { 'raster-opacity': photoOpacity },
           })
         }
       }
     }
   }, [footprint, projectFrame, showOutline, obliqueProject])
+
+  // La transparencia se aplica sobre la capa ya creada: rehacer la homografía
+  // en cada paso del slider sería lento y no cambia la imagen, solo su alfa.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const id = 'frame-proj-layer'
+    if (map.getLayer(id)) map.setPaintProperty(id, 'raster-opacity', photoOpacity)
+  }, [photoOpacity])
 
   // mover el marcador de posición del dron (el corazón del ajustador)
   useEffect(() => {
@@ -391,8 +409,8 @@ export function MapView() {
     const map = mapRef.current
     if (!map) return
     map.getCanvas().style.cursor =
-      measureMode || (gcpMode && gcpPendingPixel) || (fovPairMode && fovPairPending) ? 'crosshair' : ''
-  }, [measureMode, gcpMode, gcpPendingPixel, fovPairMode, fovPairPending])
+      measureMode || (gcpMode && gcpMarking) || (fovPairMode && fovPairPending) ? 'crosshair' : ''
+  }, [measureMode, gcpMode, gcpMarking, fovPairMode, fovPairPending])
 
   // pares de FOV en el mapa (la mitad "mapa" de cada par)
   useEffect(() => {
@@ -634,7 +652,32 @@ export function MapView() {
   return (
     // en miniatura (PiP) añadimos 'map-mini' para ocultar la atribución vía CSS
     <div className={`relative w-full h-full ${isMini ? 'map-mini' : ''}`}>
-      <div ref={containerRef} className="w-full h-full" />
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+        onMouseMove={(e) => {
+          if (!gcpMode || !gcpMarking) return
+          const r = e.currentTarget.getBoundingClientRect()
+          setLens({ x: e.clientX - r.left, y: e.clientY - r.top })
+        }}
+        onMouseLeave={() => setLens(null)}
+      />
+      {/* Retícula de puntería sobre el plano, la misma que sobre la foto. Cian
+          mientras se busca el rasgo (el click irá a la FOTO vía homografía);
+          roja en cuanto hay píxel pendiente, porque entonces el click marca la
+          verdad-terreno y ya no se puede deshacer con otro click. */}
+      {gcpMode && gcpMarking && lens && (
+        <div className="absolute inset-0 pointer-events-none z-10">
+          <div
+            className="absolute"
+            style={{ left: lens.x, top: 0, bottom: 0, width: 1, background: gcpPendingPixel ? 'rgba(239,68,68,.85)' : 'rgba(34,211,238,.7)' }}
+          />
+          <div
+            className="absolute"
+            style={{ top: lens.y, left: 0, right: 0, height: 1, background: gcpPendingPixel ? 'rgba(239,68,68,.85)' : 'rgba(34,211,238,.7)' }}
+          />
+        </div>
+      )}
       {!isMini && (
         <div className="absolute top-2 right-2 z-10 flex gap-2">
           {terrain !== 'flat' && (

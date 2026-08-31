@@ -148,3 +148,42 @@ export function warpFrameToQuad(
     ],
   }
 }
+
+/**
+ * Píxel de la foto que corresponde a un punto del suelo, usando la MISMA
+ * homografía con la que se proyecta el frame sobre su huella. Es la inversa de
+ * `warpFrameToQuad`: sirve para que un click en el mapa caiga donde toca en la
+ * imagen.
+ *
+ * `quad` son las esquinas [lng,lat] de la huella en orden TL,TR,BR,BL. Devuelve
+ * null si la homografía es degenerada o si el punto cae FUERA de la foto: un
+ * píxel fuera del encuadre no es una medida, es una extrapolación.
+ */
+export function groundToPixel(
+  quad: [number, number][],
+  imgW: number,
+  imgH: number,
+  lng: number,
+  lat: number,
+): { px: number; py: number } | null {
+  if (quad.length !== 4 || !imgW || !imgH) return null
+  // homografía en el sentido contrario: suelo -> píxel de la imagen
+  const Hinv = homography(quad as [number, number][], [
+    [0, 0],
+    [imgW, 0],
+    [imgW, imgH],
+    [0, imgH],
+  ])
+  if (!Hinv) return null
+  const [px, py] = apply(Hinv, lng, lat)
+  if (!Number.isFinite(px) || !Number.isFinite(py)) return null
+  // Holgura de medio píxel: en el borde exacto de la huella la homografía
+  // devuelve -1e-6 en vez de 0, y rechazar por eso sería un fallo fantasma.
+  // Se recorta al rango válido para no emitir nunca un píxel fuera de la imagen.
+  const tol = 0.5
+  if (px < -tol || py < -tol || px > imgW + tol || py > imgH + tol) return null
+  return {
+    px: Math.min(imgW, Math.max(0, px)),
+    py: Math.min(imgH, Math.max(0, py)),
+  }
+}

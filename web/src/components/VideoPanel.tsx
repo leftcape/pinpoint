@@ -170,15 +170,17 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
           className="absolute inset-x-0 top-0 bottom-14 cursor-crosshair"
           title={t('vp.pairTitle')}
         >
-          {/* retícula fina de precisión */}
+          {/* Retícula fina de precisión. Cian mientras se busca el rasgo en la
+              foto; roja cuando ya hay píxel pendiente y el siguiente click va
+              al mapa — mismo código de color que la retícula del plano. */}
           {lens && (
             <>
               <div
-                className="absolute pointer-events-none bg-cyan-400/70"
+                className={`absolute pointer-events-none ${gcpPendingPixel ? 'bg-red-500/85' : 'bg-cyan-400/70'}`}
                 style={{ left: lens.x, top: 0, bottom: 0, width: 1 }}
               />
               <div
-                className="absolute pointer-events-none bg-cyan-400/70"
+                className={`absolute pointer-events-none ${gcpPendingPixel ? 'bg-red-500/85' : 'bg-cyan-400/70'}`}
                 style={{ top: lens.y, left: 0, right: 0, height: 1 }}
               />
             </>

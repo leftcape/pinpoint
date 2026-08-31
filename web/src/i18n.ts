@@ -227,6 +227,10 @@ const es = {
 
   'err.noVideoInfo': 'Sin información del vídeo: no se puede tomar el punto.',
   'err.videoMoved': 'El vídeo se movió ({a}s → {b}s): punto descartado. Vuelve a marcarlo.',
+  'sync.opacity': 'Transparencia',
+  'sync.opacityTitle': 'Opacidad de la foto sobre el mapa: bájala para ver la ortofoto de debajo.',
+  'err.noFootprintForMapPick': 'Sin huella proyectada: activa «proyectar la foto» para marcar sobre el plano.',
+  'err.outsidePhoto': 'Ese punto del plano cae fuera de la foto: márcalo dentro de la huella.',
   'err.pairsSameFrame': 'Los pares de FOV deben estar en el mismo fotograma. Borra los pares o vuelve a ese frame.',
   'err.fovSolve': 'No se pudo resolver el FOV: pares demasiado juntos o sin AGL.',
   'imp.notCampaign': 'El fichero no es una campaña de PinPoint.',
@@ -256,6 +260,7 @@ FICHEROS
   campaign.json     lo mismo, anidado y sin pérdida, MÁS la configuración (config:
                     sync, los dos FOV y cómo se obtuvo el visual, terreno, deltas)
   frames/<id>/photo.jpg        fotograma crudo
+  frames/<id>/photo_points.jpg el mismo, con los puntos señalados y el centro
   frames/<id>/map_ortho.png    mapa: verdad-terreno vs proyección ortogonal
   frames/<id>/map_attitude.png mapa: verdad-terreno vs proyección con actitud
 
@@ -507,6 +512,10 @@ const en: Record<Key, string> = {
 
   'err.noVideoInfo': 'No video information: the point cannot be taken.',
   'err.videoMoved': 'The video moved ({a}s → {b}s): point discarded. Mark it again.',
+  'sync.opacity': 'Opacity',
+  'sync.opacityTitle': 'Opacity of the photo over the map: lower it to see the orthophoto underneath.',
+  'err.noFootprintForMapPick': 'No projected footprint: turn on “project the photo” to mark on the map.',
+  'err.outsidePhoto': 'That map point falls outside the photo: mark it inside the footprint.',
   'err.pairsSameFrame': 'FOV pairs must be in the same frame. Clear the pairs or go back to that frame.',
   'err.fovSolve': 'Could not solve the FOV: pairs too close together or no AGL.',
   'imp.notCampaign': 'The file is not a PinPoint campaign.',
@@ -536,6 +545,7 @@ FILES
   campaign.json     the same, nested and lossless, PLUS the configuration (config:
                     sync, both FOVs and how the visual one was obtained, terrain, deltas)
   frames/<id>/photo.jpg        raw frame
+  frames/<id>/photo_points.jpg the same, with points marked and the centre
   frames/<id>/map_ortho.png    map: ground truth vs orthogonal projection
   frames/<id>/map_attitude.png map: ground truth vs attitude projection
 
