@@ -5,8 +5,9 @@
 //                       de análisis: error vs distancia al centro, AGL, roll…
 //   campaign.json       lo mismo en estructura anidada, sin pérdida.
 //   README.txt          qué es cada cosa y qué significan las columnas.
-//   frames/<id>/…       por frame: el fotograma crudo y DOS capturas del mapa
-//                       (ortogonal y actitud) con TODOS sus puntos dibujados.
+//   frames/<id>/…       por frame: el fotograma crudo, el mismo con los puntos
+//                       señalados, y DOS capturas del mapa (ortogonal y
+//                       actitud) con TODOS sus puntos dibujados.
 //
 // Las capturas son POR FRAME, no por punto: una figura con los puntos A,B,C y
 // sus catetos se lee mejor que N figuras de un punto, y cuesta 1/N.
@@ -210,6 +211,76 @@ function grabVideoFrame(v: HTMLVideoElement): string | null {
   return cv.toDataURL('image/jpeg', 0.92)
 }
 
+// El mismo fotograma, pero con los puntos señalados. Los marcadores que se ven
+// en pantalla son <div> del DOM y no entran en la captura del <video>, así que
+// hay que redibujarlos aquí. Se exporta ADEMÁS del crudo: photo.jpg sigue
+// siendo la evidencia sin tocar, y esta es la figura legible.
+function grabVideoFrameAnnotated(v: HTMLVideoElement, frame: GcpFrame): string | null {
+  if (!v.videoWidth) return null
+  const cv = document.createElement('canvas')
+  cv.width = v.videoWidth
+  cv.height = v.videoHeight
+  const ctx = cv.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(v, 0, 0)
+
+  // el grosor se escala con la imagen para que un 4K no salga con marcas finas
+  const k = Math.max(1, cv.width / 1280)
+  const r = 9 * k
+
+  // cruz del centro óptico: el error crece con la distancia a este punto, así
+  // que la figura debe dejar ver dónde estaba.
+  const cx = cv.width / 2
+  const cy = cv.height / 2
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'
+  ctx.lineWidth = 1 * k
+  ctx.setLineDash([6 * k, 5 * k])
+  ctx.beginPath()
+  ctx.moveTo(cx, 0); ctx.lineTo(cx, cv.height)
+  ctx.moveTo(0, cy); ctx.lineTo(cv.width, cy)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  ctx.font = `bold ${13 * k}px system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+
+  for (const p of frame.points) {
+    // círculo con retícula, centrado en el píxel medido
+    ctx.beginPath()
+    ctx.arc(p.px, p.py, r, 0, Math.PI * 2)
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 3.5 * k
+    ctx.stroke()
+    ctx.strokeStyle = TRUTH
+    ctx.lineWidth = 1.8 * k
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(p.px - r * 1.6, p.py); ctx.lineTo(p.px - r * 0.45, p.py)
+    ctx.moveTo(p.px + r * 0.45, p.py); ctx.lineTo(p.px + r * 1.6, p.py)
+    ctx.moveTo(p.px, p.py - r * 1.6); ctx.lineTo(p.px, p.py - r * 0.45)
+    ctx.moveTo(p.px, p.py + r * 0.45); ctx.lineTo(p.px, p.py + r * 1.6)
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 3 * k
+    ctx.stroke()
+    ctx.strokeStyle = TRUTH
+    ctx.lineWidth = 1.4 * k
+    ctx.stroke()
+
+    // etiqueta con halo, desplazada para no tapar el rasgo medido
+    const lx = p.px
+    const ly = p.py - r * 2.2
+    ctx.lineWidth = 3.5 * k
+    ctx.strokeStyle = '#000'
+    ctx.strokeText(p.id, lx, ly)
+    ctx.fillStyle = '#fff'
+    ctx.fillText(p.id, lx, ly)
+  }
+  return cv.toDataURL('image/jpeg', 0.92)
+}
+
 export interface ExportResult {
   filename: string
   frames: number
@@ -260,6 +331,8 @@ export async function exportCampaign(): Promise<ExportResult> {
         await seekVideo(video, frame.telemetry.tv)
         const jpg = grabVideoFrame(video)
         if (jpg) files.push({ name: `${dir}/photo.jpg`, data: dataUrlToBytes(jpg) })
+        const jpgMarked = grabVideoFrameAnnotated(video, frame)
+        if (jpgMarked) files.push({ name: `${dir}/photo_points.jpg`, data: dataUrlToBytes(jpgMarked) })
       }
 
       fitToFrame(map, frame)
