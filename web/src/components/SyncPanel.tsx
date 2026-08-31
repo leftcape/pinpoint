@@ -20,6 +20,8 @@ export function SyncPanel() {
   const log = useStore((s) => s.log)
   const projectFrame = useStore((s) => s.projectFrame)
   const setProjectFrame = useStore((s) => s.setProjectFrame)
+  const photoOpacity = useStore((s) => s.photoOpacity)
+  const setPhotoOpacity = useStore((s) => s.setPhotoOpacity)
   const showOutline = useStore((s) => s.showOutline)
   const setShowOutline = useStore((s) => s.setShowOutline)
   const obliqueProject = useStore((s) => s.obliqueProject)
@@ -93,6 +95,24 @@ export function SyncPanel() {
           <input type="checkbox" checked={projectFrame} onChange={(e) => setProjectFrame(e.target.checked)} />
           {t('sync.projectFrame')}
         </label>
+        {/* Transparencia de la foto: comparar rasgo a rasgo con la ortofoto de
+            debajo es justamente cómo se ajusta el FOV y cómo se localizan los
+            puntos de control. */}
+        {(projectFrame || obliqueProject) && (
+          <label className="flex items-center gap-2 text-xs text-gray-600 pl-6">
+            <span className="whitespace-nowrap">{t('sync.opacity')}</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(photoOpacity * 100)}
+              onChange={(e) => setPhotoOpacity(Number(e.target.value) / 100)}
+              className="flex-1 accent-indigo-600"
+              title={t('sync.opacityTitle')}
+            />
+            <span className="w-9 text-right font-mono">{Math.round(photoOpacity * 100)}%</span>
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showOutline} onChange={(e) => setShowOutline(e.target.checked)} />
           {t('sync.showOutline')}
