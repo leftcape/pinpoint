@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { api } from '../api'
 import { warpFrameToQuad } from '../warp'
 import { frameIndex, type GcpPoint } from '../sampler/gcp'
+import { useT } from '../i18n'
 
 // Dos capas base conmutables:
 //  - PNOA (IGN): ortofoto oficial de España, 25cm, sin token -> para ver el terreno
@@ -53,6 +54,7 @@ export function MapView() {
   const measureMode = useStore((s) => s.measureMode)
   const measureDecompose = useStore((s) => s.measureDecompose)
   const measurePoints = useStore((s) => s.measurePoints)
+  const t = useT()
   const registerMap = useStore((s) => s.registerMap)
   const decompMarkersRef = useRef<maplibregl.Marker[]>([])
   const addMeasurePoint = useStore((s) => s.addMeasurePoint)
@@ -68,6 +70,11 @@ export function MapView() {
   const gcpPendingPixel = useStore((s) => s.gcpPendingPixel)
   const gcpCampaign = useStore((s) => s.gcpCampaign)
   const gcpSelected = useStore((s) => s.gcpSelected)
+  const fovPairMode = useStore((s) => s.fovPairMode)
+  const fovPairPending = useStore((s) => s.fovPairPending)
+  const fovPairs = useStore((s) => s.fovPairs)
+  const fovPairClickMap = useStore((s) => s.fovPairClickMap)
+  const fovMarkersRef = useRef<maplibregl.Marker[]>([])
   const currentTv = useStore((s) => s.currentTv)
   const video = useStore((s) => s.video)
   const gcpMarkersRef = useRef<maplibregl.Marker[]>([])
@@ -87,6 +94,8 @@ export function MapView() {
   // idem para el modo GCP: el click sólo cuenta si hay un píxel esperando pareja
   const gcpRef = useRef({ mode: gcpMode, pending: gcpPendingPixel, click: gcpClickMap })
   gcpRef.current = { mode: gcpMode, pending: gcpPendingPixel, click: gcpClickMap }
+  const fovRef = useRef({ mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap })
+  fovRef.current = { mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap }
 
   // init mapa
   useEffect(() => {
@@ -104,6 +113,11 @@ export function MapView() {
     // click en el mapa: si estamos midiendo, añade un vértice; en modo GCP,
     // cierra el par foto->terreno que estaba pendiente.
     map.on('click', (e) => {
+      const fv = fovRef.current
+      if (fv.mode) {
+        if (fv.pending) fv.click(e.lngLat.lng, e.lngLat.lat)
+        return
+      }
       const g = gcpRef.current
       if (g.mode) {
         if (g.pending) g.click(e.lngLat.lng, e.lngLat.lat)
@@ -376,8 +390,26 @@ export function MapView() {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    map.getCanvas().style.cursor = measureMode || (gcpMode && gcpPendingPixel) ? 'crosshair' : ''
-  }, [measureMode, gcpMode, gcpPendingPixel])
+    map.getCanvas().style.cursor =
+      measureMode || (gcpMode && gcpPendingPixel) || (fovPairMode && fovPairPending) ? 'crosshair' : ''
+  }, [measureMode, gcpMode, gcpPendingPixel, fovPairMode, fovPairPending])
+
+  // pares de FOV en el mapa (la mitad "mapa" de cada par)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    fovMarkersRef.current.forEach((m) => m.remove())
+    fovMarkersRef.current = []
+    if (!fovPairMode) return
+    for (const p of fovPairs) {
+      const el = document.createElement('div')
+      el.textContent = p.id
+      el.style.cssText =
+        'width:16px;height:16px;border-radius:50%;background:#a855f7;color:#fff;border:2px solid #fff;' +
+        'font:700 9px/12px system-ui,sans-serif;text-align:center;box-shadow:0 0 3px rgba(0,0,0,.8)'
+      fovMarkersRef.current.push(new maplibregl.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map))
+    }
+  }, [fovPairMode, fovPairs])
 
   // --- puntos de control: verdad-terreno vs las dos proyecciones ---
   // Por cada punto: el punto real (verde), la proyección ortogonal (azul) y la
@@ -613,17 +645,17 @@ export function MapView() {
                   ? 'bg-emerald-600 text-white border-emerald-600'
                   : 'bg-white/90 border-gray-300 hover:bg-white'
               }`}
-              title="Mostrar/ocultar el modelo del terreno (MDT) coloreado"
+              title={t('map.demTitle')}
             >
-              ⛰ MDT {terrain === 'ign' ? '(IGN)' : '(Cop)'}
+              {t('map.dem')} {terrain === 'ign' ? '(IGN)' : '(Cop)'}
             </button>
           )}
           <button
             onClick={toggleBase}
             className="bg-white/90 border border-gray-300 rounded px-3 py-1 text-xs font-semibold shadow hover:bg-white"
-            title="Alternar entre ortofoto (PNOA) y callejero (OSM)"
+            title={t('map.baseTitle')}
           >
-            {base === 'pnoa' ? '🛰 Satellite (PNOA)' : '🗺 Street map (OSM)'}
+            {base === 'pnoa' ? t('map.satellite') : t('map.osm')}
           </button>
         </div>
       )}

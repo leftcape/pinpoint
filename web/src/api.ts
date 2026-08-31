@@ -9,6 +9,8 @@ export interface LogPreview {
   utc_end: string
   bbox: [number, number, number, number] // min_lat,min_lng,max_lat,max_lng
   alt0: number
+  source_key?: string // clave ESTABLE del vuelo (hash de rutas): indexa la campaña en el servidor
+  source_label?: string // nombre del fichero de vídeo
 }
 
 export interface VideoInfo {
@@ -96,6 +98,17 @@ export const FOV_H_DEFAULT = 72.3
 
 export type SyncMethod = 'takeoff' | 'creation_time' | 'manual'
 
+export interface Candidate {
+  tv: number
+  roll: number
+  pitch: number
+  yaw: number
+  yaw_rate: number
+  agl: number
+  kind: 'straight' | 'turns'
+  bin: string
+}
+
 // Modelo del terreno para el AGL. 'flat' = cota del despegue (v0.1.0);
 // 'ign' = MDT 5m España; 'cop' = Copernicus DEM 90m mundial.
 export type TerrainSource = 'flat' | 'ign' | 'cop'
@@ -108,7 +121,7 @@ async function j<T>(r: Response): Promise<T> {
 
 export const api = {
   async registerSource(bin_path: string, video_path: string) {
-    return j<{ id: string }>(
+    return j<{ id: string; key: string; label: string }>(
       await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,11 +134,42 @@ export const api = {
     const fd = new FormData()
     fd.append('bin', bin)
     fd.append('video', video)
-    return j<{ id: string }>(await fetch('/api/sources/upload', { method: 'POST', body: fd }))
+    return j<{ id: string; key: string; label: string }>(
+      await fetch('/api/sources/upload', { method: 'POST', body: fd }),
+    )
   },
 
   async log(sid: string) {
     return j<LogPreview>(await fetch(`/api/sources/${sid}/log`))
+  },
+
+  async listSources() {
+    return j<{ id: string; key: string; label: string; bin_path: string; video_path: string; has_campaign: boolean }[]>(
+      await fetch('/api/sources'),
+    )
+  },
+
+  // candidatos de fotograma desde el log (pasadas rectas / virajes)
+  async candidates(sid: string, mode: 'straight' | 'turns', method: SyncMethod, offset: number, n: number, maxRoll: number) {
+    const p = new URLSearchParams({ mode, method, offset: String(offset), n: String(n), max_roll: String(maxRoll) })
+    return j<{ mode: string; candidates: Candidate[] }>(await fetch(`/api/sources/${sid}/candidates?${p}`))
+  },
+
+  // --- campaña de puntos de control guardada junto al vuelo ---
+  async campaignGet(sid: string): Promise<unknown | null> {
+    const r = await fetch(`/api/sources/${sid}/campaign`)
+    if (r.status === 404) return null
+    return j<unknown>(r)
+  },
+
+  async campaignPut(sid: string, campaign: unknown) {
+    return j<{ ok: boolean; key: string; frames: number; points: number }>(
+      await fetch(`/api/sources/${sid}/campaign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(campaign),
+      }),
+    )
   },
 
   async videoInfo(sid: string) {

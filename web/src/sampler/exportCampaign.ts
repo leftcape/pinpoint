@@ -16,6 +16,7 @@ import maplibregl from 'maplibre-gl'
 import { useStore } from '../store'
 import { buildZip, textEntry, bytesEntry, dataUrlToBytes } from './zip'
 import { campaignToCsv, type GcpFrame } from './gcp'
+import { t } from '../i18n'
 
 type Store = ReturnType<typeof useStore.getState>
 
@@ -221,8 +222,8 @@ export async function exportCampaign(): Promise<ExportResult> {
   const map = s0.mapHandle
   const video = s0.videoEl
 
-  if (!campaign.frames.length) throw new Error('No hay puntos que exportar.')
-  if (!map) throw new Error('El mapa no está listo.')
+  if (!campaign.frames.length) throw new Error(t('exp.noPoints'))
+  if (!map) throw new Error(t('exp.noMap'))
 
   // estado que hay que devolver tal cual al terminar
   const saved = {
@@ -305,60 +306,7 @@ export async function exportCampaign(): Promise<ExportResult> {
   entries.push(
     textEntry(
       'README.txt',
-      `PinPoint — campaña de puntos de control
-${campaign.frames.length} frame(s), ${total} punto(s). Exportado: ${new Date().toISOString()}
-
-QUÉ ES ESTO
-  Cada punto de control es un rasgo del terreno identificado DOS veces: un click
-  en la foto aérea (píxel) y un click en el mapa (verdad-terreno). El píxel se
-  proyecta al suelo por dos vías y se mide cuánto se aleja cada una de la
-  verdad-terreno. Ese es el error.
-
-  El píxel queda atado al instante exacto en que se clicó (el vídeo se pausa) y
-  toda la telemetría se pide para ESE instante: de lo contrario se estaría
-  midiendo el desfase de la toma, no el error del método.
-
-    ortho     proyección ortogonal: pinhole nadir puro, sin actitud del dron
-              (misma geometría que "Project the frame image").      AZUL
-    attitude  proyección con la actitud completa del dron.          ROJO
-    truth     el punto real marcado a mano en el mapa.              VERDE
-
-FICHEROS
-  points.csv        una fila por punto, todos los frames juntos -> tabla de análisis
-  campaign.json     lo mismo, anidado y sin pérdida
-  frames/<id>/photo.jpg        fotograma crudo
-  frames/<id>/map_ortho.png    mapa: verdad-terreno vs proyección ortogonal
-  frames/<id>/map_attitude.png mapa: verdad-terreno vs proyección con actitud
-                               (catetos X/Y en discontinua, con sus valores)
-
-COLUMNAS DEL CSV (las que importan)
-  off_x_px, off_y_px, off_norm_px   distancia del punto al CENTRO de la imagen.
-                                    Variable independiente: el error debería
-                                    crecer al alejarse del centro.
-  err_ortho_m, err_att_m            distancia proyección -> verdad-terreno.
-                                    VARIABLE DEPENDIENTE: el error del método.
-  err_*_x_m, err_*_y_m              el mismo error descompuesto E-O / N-S.
-  truth_dist_m                      distancia verdad-terreno -> nadir del dron.
-  agl_m, pitch_deg, roll_deg,       condiciones de vuelo: acotan el dominio de
-  drone_pitch_deg, yaw_deg          validez ("vale hasta X m del centro SI…").
-  fov_h_deg, aspect, d_pitch,       calibración con la que se calculó. fov_h = FOV
-  d_roll                            horizontal (grados) fijado a ojo; aspect =
-                                    ancho/alto del sensor (deriva el FOV vertical).
-                                    Si se recalibra, los datos viejos no son
-                                    comparables.
-  map_zoom                          zoom al clicar: acota la precisión del
-                                    propio ground-truth (el instrumento de medida).
-  nadir_ok, reason                  si el frame estaba fuera del gate cenital.
-  frame_index                       identidad del fotograma = round(tv·fps).
-                                    Agrupa por aquí, no por tv_s: dos clicks en
-                                    la misma imagen pueden dar tv distintos.
-
-CONVENIOS
-  X = Este-Oeste, Y = Norte-Sur, metros. Ángulos en grados.
-  pitch = gimbal (marco terrestre, -90 = nadir); roll = del dron (la cámara no
-  lo compensa: gimbal de 1 eje); drone_pitch = cabeceo del cuerpo, interviene en
-  la geometría del contorno.
-`,
+      t('readme', { frames: campaign.frames.length, points: total, date: new Date().toISOString() }),
     ),
   )
 
