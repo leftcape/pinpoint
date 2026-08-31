@@ -23,18 +23,31 @@ tesis.
 
 ## Lo crítico ANTES de recoger datos en serio
 
-1. **Calibra el FOV primero.** La lente real es más ancha que los 72.3° que asume
-   el código por defecto. Sin calibrar, el paper mediría tu error de calibración,
-   no el del método. Toma unos puntos en un frame de **roll bajo** (|roll|<0.5°),
-   mira el `fov_scale` sugerido en el panel, aplícalo, y ENTONCES recoge.
-2. **La distorsión de gran angular es un RESULTADO, no un fallo.** Ningún `fov_scale`
-   único deja todos los puntos a cero. Eso es lo publicable: "hasta X px del centro
-   el pinhole vale; más allá hace falta el modelo de Brown". No lo escondas.
-3. **Sincronía manual, offset ≈ 1.4 s** para el vuelo de referencia. `takeoff` se
-   equivoca ~20 s en este VTOL (detecta la transición, no el despegue).
-4. **Fija UNA fuente de terreno y UN fov_scale** para toda la campaña; no los
-   cambies a mitad. El CSV guarda con qué se midió cada punto, pero mezclar
-   configuraciones ensucia el análisis.
+1. **Sincroniza y luego fija el FOV, en ese orden** (pestaña Flight). Hay DOS
+   FOV y se guardan los dos en la campaña: `sfm` (autocalibración OpenSfM de la
+   misma cámara: f=0.6849 → 72.3°; describe el centro) y `visual` (el nuestro
+   contra la ortofoto: a ojo o, mejor, **por pares**, que resuelve la escala de
+   las distancias entre rasgos y no depende del offset ni del yaw). Se elige el
+   activo; cada punto se proyecta con los dos (`alt_*` en el CSV).
+2. **La distorsión de gran angular es un RESULTADO, no un fallo.** La diferencia
+   sfm/visual y el crecimiento del error con la distancia al centro son lo
+   publicable: "hasta X px del centro el pinhole vale; más allá hace falta el
+   modelo de Brown". No lo escondas.
+3. **Sincronía manual** para el vuelo de referencia. `takeoff` se equivoca ~20 s
+   en este VTOL (detecta la transición, no el despegue). ⚠ Hay dos cifras
+   anotadas para el offset fino (1.0 s en el PROCESO del paper, ≈1.4 s aquí):
+   reconciliar antes de la campaña y dejar UNA.
+4. **Bloquea la campaña** (candado en la pestaña GCP) antes de marcar: congela
+   sync, FOV, terreno y deltas. Mezclar configuraciones ensucia el análisis.
+
+## Dónde vive la campaña
+
+`campaign.json` = config (sync, dos FOV y cómo se obtuvo el visual, aspect,
+terreno, deltas, candado) + frames + puntos. Se guarda en el servidor por vuelo
+(`$PINPOINT_DATA/campaigns/<clave>.json`, clave = hash de rutas bin+vídeo,
+estable entre reinicios), en localStorage (caché) y se exporta/importa como
+fichero. El `id` de sesión de un vuelo es un uuid en memoria: NO sirve para
+indexar nada persistente; usa `source_key`.
 
 ## Honestidad que debe ir en el paper
 
@@ -47,16 +60,18 @@ tesis.
 
 1. Carga un vuelo (`.bin` + vídeo) en la pantalla inicial: "Ruta en servidor"
    (fichero ya en disco) o "Subir ficheros" (arrastra desde el navegador).
-2. Sincroniza en la pestaña **Flight**.
-3. Pestaña **Location** → casilla **"Ground control points (paper)"**:
-   - Selecciona el **Modelo del terreno** (Plano / IGN 5m / Copernicus 90m).
+2. Sincroniza y fija el FOV en la pestaña **Flight**.
+3. Pestaña **GCP**: modelo del terreno, **bloquear**, y **"Tomar puntos"**:
    - **"Empezar a marcar este frame"** (pausa el vídeo, activa el overlay de clicks);
      marca un rasgo en la FOTO → el mismo rasgo en el MAPA (verdad-terreno).
+   - La ficha del punto muestra el error descompuesto (E/N y along/cross) con
+     los dos FOV, y el offset del píxel al centro; las estadísticas van en vivo.
    - **"Terminar este frame"** libera el vídeo para moverte a otro fotograma.
    - Con MDT activo: botón **⛰ MDT** pinta el terreno coloreado; el ratón muestra
      la altura abajo-izquierda.
-4. **Export campaign** → ZIP con `points.csv` (una fila por punto, todas las
-   condiciones), `campaign.json`, y por frame la foto + 2 figuras del mapa.
+4. **Exportar** → ZIP con `points.csv` (una fila por punto, todas las
+   condiciones, columnas `alt_*` con el otro FOV), `campaign.json`, y por frame
+   la foto + 2 figuras del mapa. **Importar** recupera un `campaign.json`.
 
 ## Arquitectura
 
@@ -64,7 +79,9 @@ Por capas (el núcleo es Python puro, sin navegador):
 ```
 pinpoint_core/   binlog, sync, footprint, video, terrain, terrain_cop  (Python puro)
 server/app.py    FastAPI fino que expone el núcleo por HTTP (SIN jobs de WebODM)
-web/             front React/Vite/Tailwind/MapLibre/Zustand
+web/             front React/Vite/Tailwind/MapLibre/Zustand. TODO texto visible pasa por
+                 src/i18n.ts (ES/EN, idioma del navegador por defecto, selector en la
+                 cabecera): al añadir un texto, añade la clave en los DOS diccionarios.
 docs/  data/     paper + dataset (enlace externo)
 ```
 El núcleo es copia **congelada** del proyecto `geosync`; ver `FROZEN.md`. PinPoint
@@ -95,9 +112,16 @@ El vuelo de referencia en disco del servidor:
 /mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico/ (00000064.BIN +
 recording_96_visible.mkv).
 
-## Estado (2026-07-16) y pendientes
+## Estado (2026-08-26) y pendientes
 
-- **App corriendo**: http://192.168.1.200:8095 (v0.2.0, con capa MDT).
+- **App corriendo**: https://pinpoint.leftcape.com (staging 192.168.1.200:8095).
+  v0.3.1: campaña unificada en servidor, dos FOV, pestaña GCP, ES/EN, registro
+  persistente de vuelos, candidatos de frame, `scripts/analisis_campana.py`.
+- Los `id` de sesión siguen siendo uuid, pero `registry.json` los re-registra al
+  arrancar; la subida por navegador usa como carpeta el hash del `.bin`.
+- **Paper**: `~/repos/upm/papers-26-27/02_fmv/` (bitácora, PROCESO, compendio de
+  estudios en `docs/ENFOQUE_2026-08-26.md`). Los estudios E1–E9 salen de
+  `points.csv`.
 - **GitHub PRIVADO**: `leftcape/pinpoint` (cuenta `elgeografo`, SSH). `git push`.
 - **Licencias con titularidad**: autor Luis Izquierdo Mesa, explotación LeftCape
   (PolyForm-NC código, CC BY-NC docs). El usuario asume el riesgo legal sin abogado.

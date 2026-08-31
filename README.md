@@ -39,6 +39,13 @@ Dos formas de proyectar el mismo píxel, para poder comparar:
 
 ---
 
+## Idioma
+
+La interfaz está en **español e inglés**. Por defecto usa el idioma del navegador;
+el selector ES/EN de la cabecera lo cambia y la elección se recuerda en el
+navegador. Los textos viven en `web/src/i18n.ts` (un diccionario por idioma; las
+claves son las mismas). El `README.txt` del ZIP exportado sale en el idioma activo.
+
 ## Arquitectura
 
 Por capas, a propósito: el núcleo es Python puro y no depende del navegador.
@@ -51,7 +58,7 @@ pinpoint_core/     núcleo de proyección (Python puro, solo pymavlink)
   video.py           sondeo del vídeo + extracción de un fotograma
 server/
   app.py             FastAPI fino que expone el núcleo por HTTP
-web/                 front React/Vite/Tailwind/MapLibre/Zustand
+web/                 front React/Vite/Tailwind/MapLibre/Zustand (i18n ES/EN en src/i18n.ts)
 docs/                artículo y material de investigación
 data/                dataset de ejemplo (enlace externo, ver data/README.md)
 ```
@@ -94,32 +101,57 @@ docker compose up -d --build
 2. **Sincroniza** en la pestaña *Flight*. Para el vuelo de referencia, usa
    sincronía **manual con offset ≈ 1,4 s** (la detección por despegue falla en
    este VTOL: detecta la transición, no el despegue).
-3. Pestaña *Location* → casilla **Ground control points (paper)**: foto y mapa
-   lado a lado. Marca un rasgo en la foto, márcalo en el mapa, y PinPoint calcula
-   el error de las dos proyecciones contra tu verdad-terreno.
-4. Repite en varios frames; la campaña se acumula y se guarda sola.
-5. **Export campaign** → un ZIP con `points.csv` (una fila por punto, todas las
-   condiciones de vuelo), un JSON, y por cada frame la foto + dos figuras del
-   mapa con los errores dibujados.
+3. Fija el **FOV** en *Flight* (ver abajo) y, en *GCP*, elige el terreno y
+   **bloquea** la campaña.
+4. Pestaña *GCP* → **Tomar puntos**: foto y mapa lado a lado. Marca un rasgo en
+   la foto, márcalo en el mapa, y PinPoint calcula el error de las dos
+   proyecciones (ortogonal / con actitud) contra tu verdad-terreno, con los dos
+   FOV, y te lo enseña descompuesto: E/N y, en ejes de la imagen, *along* (a lo
+   largo de la traza: ahí se ve un desfase de sync) y *cross* (transversal: ahí
+   se ven FOV, roll y distorsión), más la distancia del píxel al centro.
+5. Repite en varios frames; la campaña se acumula y se guarda sola (servidor +
+   navegador). Las estadísticas (RMSE, mediana, P90 sobre frames nadir) se
+   actualizan en vivo.
+6. **Exportar** → un ZIP con `points.csv` (una fila por punto, todas las
+   condiciones de vuelo), `campaign.json`, y por cada frame la foto + dos figuras
+   del mapa con los errores dibujados. **Importar** recupera un `campaign.json`.
 
 El CSV es la tabla de análisis directa: error radial vs distancia al centro, AGL,
 roll, etc.
 
 ---
 
-## Calibración del FOV
+## El FOV: dos valores, los dos guardados
 
-La lente real es más ancha que la que asume el código por defecto (72,3°). Antes
-de recoger una campaña seria hay que **calibrar el `fov_scale`**: la propia
-herramienta lo sugiere a partir de los puntos tomados. Toma primero unos puntos
-en un frame con **roll bajo** (|roll| < 0,5°) para aislar el FOV.
+La proyección necesita el campo de visión horizontal de la cámara, que no se
+conoce a priori. PinPoint guarda **dos** valores en la campaña y proyecta cada
+punto de control con los dos:
 
-> **Terreno.** Con el MDT activado (IGN o Copernicus), el AGL usa la cota real
-> del terreno, así que el error radial ya no mezcla la lente con el desnivel y
-> puedes calibrar en cualquier frame. Con `flat` (v0.1.0) calibra solo sobre
-> tramos llanos. Ver abajo.
+| | de dónde sale | qué describe |
+|---|---|---|
+| **sfm** | autocalibración fotogramétrica (OpenSfM/ODM) de la misma cámara: focal normalizado `f` → `fov = 2·atan(0.5/f)`. Para el vuelo de referencia `f = 0.6849` → 72.3° | el centro de la imagen (focal pinhole) |
+| **visual** | el nuestro, contra la ortofoto, en la pestaña *Flight*: **a ojo** (la huella nadir queda clavada bajo el dron y el FOV sólo la escala hasta que la foto encaja) o **por pares** (2–4 rasgos marcados en foto y mapa; la escala GSD sale de las *distancias* entre pares, así que no depende del offset de sincronía ni del yaw; `fov = 2·atan(W·GSD/(2·AGL))`) | la escala global del frame, bordes incluidos |
 
----
+La diferencia entre ambos es la distorsión de gran angular: **un resultado, no
+un fallo**. Se elige cuál está *activo*; cada punto lleva sus proyecciones con el
+activo y, en las columnas `alt_*` del CSV, con el otro.
+
+Flujo: sincronizar (Flight) → FOV (Flight) → bloquear la campaña (GCP) → marcar.
+
+## La campaña: dónde vive
+
+Todo lo que se mide va en **una campaña por vuelo** (`campaign.json`): la
+configuración (sync, los dos FOV y cómo se obtuvo el visual, aspect, terreno,
+deltas, candado) y los frames con sus puntos. Se guarda:
+
+- en el **servidor**, junto al vuelo, en `$PINPOINT_DATA/campaigns/<clave>.json`
+  (la clave es un hash de las rutas del `.bin` y del vídeo: sobrevive a
+  reinicios y a re-registrar el vuelo);
+- en `localStorage` del navegador (caché; un F5 no tira horas de marcado);
+- exportable/importable como fichero desde la pestaña *GCP*.
+
+El **candado** bloquea sync, FOV y terreno: mezclar configuraciones a mitad de
+campaña ensucia el análisis. Se desbloquea a propósito, no por accidente.
 
 ## Modelo del terreno
 
@@ -154,10 +186,33 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
 - **v0.2.0 (actual)** — modelo del terreno: IGN 5 m (España) y Copernicus DEM
   90 m (mundial), elegibles para comparar, con degradación a plano. AGL real bajo
   el dron; sin corrección de geoide (todo ortométrico). `terrain_source` en el CSV.
-- **Siguiente** — ray-cast del píxel contra el terreno inclinado (cota bajo el
-  punto, no bajo el dron); dataset de ejemplo citable (DOI) y redacción del paper.
+- **v0.3.0 (actual)** — campaña unificada (`campaign.json` con configuración +
+  puntos) guardada en servidor por vuelo; dos FOV (sfm / visual) con resolución
+  por pares; pestaña GCP con error descompuesto (E/N, along/cross), estadísticas
+  en vivo, candado, import/export.
+- **v0.3.1** — interfaz ES/EN; registro persistente de vuelos (`registry.json`,
+  lista de "vuelos conocidos" al cargar); subida por hash del `.bin` (resubir =
+  misma carpeta y misma campaña); **candidatos de frame** desde el log (pestaña
+  Puntos de control: rectas para E1, virajes para E3); `scripts/analisis_campana.py`
+  (figuras E1–E4 desde `campaign.json` y **reproyección** con otro terreno / FOV /
+  desfase de sincronía sin volver a marcar).
+- **Siguiente** — ray-cast del píxel contra el terreno inclinado; dataset de
+  ejemplo citable (DOI).
 
 ---
+
+## Análisis fuera de la web
+
+```bash
+# figuras E1–E4 + estadísticas (RMSE, mediana, P90, CE90) desde el ZIP exportado
+python scripts/analisis_campana.py figuras --campaign campaign.json --out analisis/
+# los MISMOS puntos con otro terreno / FOV / desfase de sync (necesita el .bin)
+python scripts/analisis_campana.py reproyectar --campaign campaign.json --bin 00000064.BIN \
+    --terrain flat ign --fov 72.26 80 --dt -1 -0.5 -0.2 0 0.2 0.5 1 --out analisis/reproj.csv
+```
+
+En el servidor (la imagen no lleva matplotlib; `reproyectar` no lo necesita):
+`docker run --rm -v /home/luis/docker/pinpoint:/src -v /mnt/data/srv/carto_private:/mnt/data/srv/carto_private:ro -w /src pinpoint-pinpoint python scripts/analisis_campana.py reproyectar …`
 
 ## Licencia y créditos
 
