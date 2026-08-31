@@ -14,11 +14,15 @@ Endpoints:
   GET  /api/sources/{id}/frame          -> un fotograma JPEG en tv
   GET  /api/sources/{id}/footprint      -> footprint del frame sobre el terreno en tv
   GET  /api/sources/{id}/project_point  -> proyecta un píxel al terreno (con actitud u ortogonal)
+  GET  /api/sources/{id}/campaign       -> campaña de puntos de control guardada para este vuelo
+  PUT  /api/sources/{id}/campaign       -> guarda la campaña (config + puntos) junto al vuelo
 Sirve el front estático (web/dist) en / si existe.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -37,11 +41,19 @@ from pinpoint_core import video as _video
 from pinpoint_core import sync as _sync
 from pinpoint_core import footprint as _footprint
 from pinpoint_core import terrain as _terrain
+from pinpoint_core import candidates as _cand
 
 # --- almacenamiento ---
 DATA_DIR = Path(os.environ.get("PINPOINT_DATA", "/pinpoint-data")).resolve()
 SOURCES_DIR = DATA_DIR / "sources"
 SOURCES_DIR.mkdir(parents=True, exist_ok=True)
+# Campañas de puntos de control, UNA por vuelo, por su clave estable (ver
+# Source.key): el id de sesión es un uuid en memoria y cambia al reiniciar.
+CAMPAIGNS_DIR = DATA_DIR / "campaigns"
+CAMPAIGNS_DIR.mkdir(parents=True, exist_ok=True)
+# Registro persistente de vuelos (clave -> rutas): al arrancar se vuelven a
+# registrar, así "sources" no vuelve a 0 con cada reinicio.
+REGISTRY_PATH = DATA_DIR / "registry.json"
 
 app = FastAPI(title="PinPoint", version="0.2.0")
 app.add_middleware(
@@ -61,6 +73,17 @@ class Source:
     # ráster se descarga UNA VEZ por fuente y se reutiliza en cada proyección.
     _terrain: dict = field(default_factory=dict)
 
+    @property
+    def key(self) -> str:
+        """Clave ESTABLE del vuelo: hash de las rutas del bin y del vídeo. Con
+        ella la campaña de GCP sobrevive a reinicios y a re-registrar el vuelo."""
+        h = hashlib.sha1(f"{self.bin_path}|{self.video_path}".encode()).hexdigest()
+        return h[:16]
+
+    @property
+    def label(self) -> str:
+        return os.path.basename(self.video_path)
+
     def log(self) -> _binlog.BinLog:
         if self._log is None:
             self._log = _binlog.parse_bin(self.bin_path)
@@ -78,6 +101,44 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {}
+
+
+def _load_registry() -> dict:
+    try:
+        return json.loads(REGISTRY_PATH.read_text()) if REGISTRY_PATH.exists() else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _remember(src: Source) -> None:
+    reg = _load_registry()
+    reg[src.key] = {"bin_path": src.bin_path, "video_path": src.video_path}
+    tmp = REGISTRY_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(reg, indent=1))
+    tmp.replace(REGISTRY_PATH)
+
+
+def _register(bin_path: str, video_path: str, sid: str | None = None) -> Source:
+    """Registra (o reutiliza) un vuelo por sus rutas. Misma pareja de rutas =>
+    misma clave y, si ya estaba en memoria, misma sesión."""
+    for src in SOURCES.values():
+        if src.bin_path == bin_path and src.video_path == video_path:
+            return src
+    sid = sid or uuid.uuid4().hex[:12]
+    src = Source(id=sid, bin_path=bin_path, video_path=video_path)
+    SOURCES[sid] = src
+    _remember(src)
+    return src
+
+
+def _restore_registry() -> None:
+    for entry in _load_registry().values():
+        b, v = entry.get("bin_path", ""), entry.get("video_path", "")
+        if os.path.exists(b) and os.path.exists(v):
+            _register(b, v)
+
+
+_restore_registry()
 
 
 # ======================= helpers =======================
@@ -129,24 +190,51 @@ def register_source(body: RegisterBody):
         raise HTTPException(400, f"no existe: {body.bin_path}")
     if not os.path.exists(body.video_path):
         raise HTTPException(400, f"no existe: {body.video_path}")
-    sid = uuid.uuid4().hex[:12]
-    SOURCES[sid] = Source(id=sid, bin_path=body.bin_path, video_path=body.video_path)
-    return {"id": sid}
+    src = _register(body.bin_path, body.video_path)
+    return {"id": src.id, "key": src.key, "label": src.label}
+
+
+@app.get("/api/sources")
+def list_sources():
+    """Vuelos conocidos (registrados o subidos), con si tienen campaña guardada."""
+    return [
+        {
+            "id": s.id, "key": s.key, "label": s.label,
+            "bin_path": s.bin_path, "video_path": s.video_path,
+            "has_campaign": _campaign_path(s).exists(),
+        }
+        for s in SOURCES.values()
+    ]
 
 
 @app.post("/api/sources/upload")
 async def upload_source(bin: UploadFile = File(...), video: UploadFile = File(...)):
-    """Sube bin+video al servidor y los registra."""
-    sid = uuid.uuid4().hex[:12]
+    """Sube bin+video al servidor y los registra. La carpeta se llama por el
+    hash del contenido del .bin: subir el mismo vuelo dos veces cae en la misma
+    carpeta (no se duplica el vídeo) y conserva la clave, y con ella la campaña."""
+    tmp = SOURCES_DIR / f"_up_{uuid.uuid4().hex[:8]}"
+    tmp.mkdir(parents=True, exist_ok=True)
+    bin_name = os.path.basename(bin.filename or "log.bin")
+    vid_name = os.path.basename(video.filename or "video.mkv")
+    h = hashlib.sha1()
+    with open(tmp / bin_name, "wb") as f:
+        while chunk := bin.file.read(1024 * 1024):
+            h.update(chunk)
+            f.write(chunk)
+    sid = h.hexdigest()[:12]
     sdir = SOURCES_DIR / sid
     sdir.mkdir(parents=True, exist_ok=True)
-    bin_path = sdir / (bin.filename or "log.bin")
-    vid_path = sdir / (video.filename or "video.mkv")
-    for up, dst in ((bin, bin_path), (video, vid_path)):
-        with open(dst, "wb") as f:
-            shutil.copyfileobj(up.file, f)
-    SOURCES[sid] = Source(id=sid, bin_path=str(bin_path), video_path=str(vid_path))
-    return {"id": sid}
+    (tmp / bin_name).replace(sdir / bin_name)
+    vid_path = sdir / vid_name
+    # el vídeo sólo se vuelve a escribir si no está ya (mismo nombre y tamaño)
+    size = getattr(video, "size", None)
+    if not (vid_path.exists() and size and vid_path.stat().st_size == size):
+        with open(tmp / vid_name, "wb") as f:
+            shutil.copyfileobj(video.file, f)
+        (tmp / vid_name).replace(vid_path)
+    shutil.rmtree(tmp, ignore_errors=True)
+    src = _register(str(sdir / bin_name), str(vid_path), sid=sid)
+    return {"id": src.id, "key": src.key, "label": src.label}
 
 
 @app.get("/api/sources/{sid}/log")
@@ -164,7 +252,71 @@ def source_log(sid: str, step: int = Query(1, ge=1)):
         "utc_end": log.utc_end.isoformat(),
         "bbox": list(log.bbox()),
         "alt0": log.alt0,
+        "source_key": s.key,
+        "source_label": s.label,
     }
+
+
+@app.get("/api/sources/{sid}/candidates")
+def source_candidates(
+    sid: str,
+    mode: str = Query("straight", description="straight (E1) | turns (E3)"),
+    method: str = Query("manual"),
+    offset: float = Query(0.0),
+    n: int = Query(25, ge=1, le=200, description="straight: nº de tramos"),
+    max_roll: float = Query(3.0, description="straight: |roll| máximo (°)"),
+    min_agl: float = Query(20.0),
+    per_bin: int = Query(2, ge=1, le=5, description="turns: candidatos por franja de roll"),
+):
+    """Instantes del vídeo que merece la pena mirar para marcar puntos de
+    control, elegidos sólo con la telemetría (ver pinpoint_core/candidates.py)."""
+    s = _get_source(sid)
+    log = s.log()
+    v = _video.probe(s.video_path)
+    if method == "takeoff":
+        sr = _sync.by_takeoff(log)
+    elif method == "creation_time":
+        sr = _sync.by_creation_time(log, v)
+    else:
+        sr = _sync.manual(offset)
+    if mode == "turns":
+        c = _cand.turn_candidates(log, sr, v.duration_s, per_bin=per_bin, min_agl=min_agl)
+    else:
+        c = _cand.straight_candidates(log, sr, v.duration_s, n=n, max_roll=max_roll, min_agl=min_agl)
+    return {"mode": mode, "candidates": _cand.to_dicts(c)}
+
+
+# ======================= campaña de puntos de control =======================
+def _campaign_path(s: Source) -> Path:
+    return CAMPAIGNS_DIR / f"{s.key}.json"
+
+
+@app.get("/api/sources/{sid}/campaign")
+def campaign_get(sid: str):
+    """La campaña guardada para este vuelo (por su clave estable), o 404."""
+    s = _get_source(sid)
+    p = _campaign_path(s)
+    if not p.exists():
+        raise HTTPException(404, "sin campaña guardada para este vuelo")
+    return JSONResponse(content=json.loads(p.read_text()))
+
+
+@app.put("/api/sources/{sid}/campaign")
+async def campaign_put(sid: str, request: Request):
+    """Guarda la campaña (config + frames + puntos) tal cual la manda el front.
+    El servidor no la interpreta: es el respaldo de horas de marcado."""
+    s = _get_source(sid)
+    body = await request.json()
+    if not isinstance(body, dict) or "frames" not in body:
+        raise HTTPException(400, "campaña inválida")
+    body["source_key"] = s.key
+    body["source_label"] = s.label
+    p = _campaign_path(s)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(body, ensure_ascii=False, indent=1))
+    tmp.replace(p)   # escritura atómica: nunca un fichero a medias
+    n_pts = sum(len(f.get("points", [])) for f in body.get("frames", []))
+    return {"ok": True, "key": s.key, "frames": len(body.get("frames", [])), "points": n_pts}
 
 
 @app.get("/api/sources/{sid}/video/info")
