@@ -30,7 +30,7 @@ import uuid
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Form, Header
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -43,6 +43,13 @@ from pinpoint_core import footprint as _footprint
 from pinpoint_core import terrain as _terrain
 from pinpoint_core import candidates as _cand
 
+try:                                   # como paquete (uvicorn server.app:app)
+    from .projects import ProjectStore, Project as _Project
+    from . import projects as _projects
+except ImportError:                    # o como módulo suelto
+    from projects import ProjectStore, Project as _Project
+    import projects as _projects
+
 # --- almacenamiento ---
 DATA_DIR = Path(os.environ.get("PINPOINT_DATA", "/pinpoint-data")).resolve()
 SOURCES_DIR = DATA_DIR / "sources"
@@ -54,6 +61,11 @@ CAMPAIGNS_DIR.mkdir(parents=True, exist_ok=True)
 # Registro persistente de vuelos (clave -> rutas): al arrancar se vuelven a
 # registrar, así "sources" no vuelve a 0 con cada reinicio.
 REGISTRY_PATH = DATA_DIR / "registry.json"
+
+# Proyectos: la unidad de trabajo (vídeo + log + config + puntos + metadatos)
+# con identidad propia, que no depende de cómo se llamen los ficheros.
+PROJECTS_DIR = DATA_DIR / "projects"
+PROJECTS = ProjectStore(PROJECTS_DIR)
 
 # --- biblioteca de vuelos ---
 # Carpeta del servidor donde viven los vídeos y los logs. La pantalla inicial la
@@ -200,7 +212,74 @@ def _restore_registry() -> None:
             _register(b, v)
 
 
+def _migrar_campanas() -> None:
+    """Convierte en proyectos las campañas del esquema antiguo.
+
+    Antes la campaña se guardaba en `campaigns/<hash de rutas>.json`, así que
+    renombrar un fichero la dejaba huérfana. Aquí cada una pasa a ser un
+    proyecto con identidad propia. Se hace UNA vez: los ficheros originales se
+    conservan (no se borra nada) y se marca la campaña como migrada para no
+    volver a importarla si el usuario la sigue editando desde el proyecto.
+    """
+    if not CAMPAIGNS_DIR.is_dir():
+        return
+    reg = _load_registry()
+    ya = PROJECTS.list()
+    hechas = {pr.meta.get("migrated_from") for pr in ya}
+    # Huella del contenido para no duplicar: la misma campaña puede estar
+    # guardada bajo dos claves (p.ej. tras renombrar los ficheros y copiarla).
+    huellas = {pr.meta.get("content_hash") for pr in ya if pr.meta.get("content_hash")}
+    for f in sorted(CAMPAIGNS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        clave = f.stem
+        if clave in hechas:
+            continue
+        try:
+            camp = json.loads(f.read_text())
+        except Exception:
+            continue
+        n_pts = sum(len(fr.get("points", [])) for fr in camp.get("frames", []))
+        if n_pts == 0:
+            continue                      # campañas vacías: no merecen proyecto
+        # huella de los puntos: si dos ficheros llevan lo mismo, es un solo vuelo
+        huella = hashlib.sha1(json.dumps(
+            camp.get("frames", []), sort_keys=True).encode()).hexdigest()[:16]
+        if huella in huellas:
+            print(f"[migración] {clave}: mismos puntos que un proyecto ya creado, se omite")
+            continue
+        huellas.add(huella)
+        rutas = reg.get(clave, {})
+        # Si esas rutas ya no existen (ficheros renombrados), buscar en el
+        # registro otra entrada con los mismos puntos cuyos ficheros sí estén:
+        # es el caso de un vuelo renombrado, y queremos las rutas vigentes.
+        if not (rutas.get("bin_path") and os.path.exists(rutas["bin_path"])):
+            for k, r in reg.items():
+                if os.path.exists(r.get("bin_path", "")) and os.path.exists(r.get("video_path", "")):
+                    otra = CAMPAIGNS_DIR / f"{k}.json"
+                    if otra.exists():
+                        try:
+                            oc = json.loads(otra.read_text())
+                        except Exception:
+                            continue
+                        oh = hashlib.sha1(json.dumps(
+                            oc.get("frames", []), sort_keys=True).encode()).hexdigest()[:16]
+                        if oh == huella:
+                            rutas = r
+                            break
+        nombre = camp.get("source_label") or rutas.get("video_path", clave)
+        nombre = os.path.splitext(os.path.basename(nombre))[0] or clave
+        pr = PROJECTS.create(
+            nombre,
+            bin_path=rutas.get("bin_path", ""),
+            video_path=rutas.get("video_path", ""),
+            meta={"migrated_from": clave, "content_hash": huella,
+                  "note": "importado del esquema anterior de campañas"},
+        )
+        PROJECTS.save_campaign(pr.id, camp)
+        print(f"[migración] campaña {clave} ({n_pts} pts) -> proyecto '{pr.id}'")
+
+
 _restore_registry()
+_migrar_campanas()
 
 
 # ======================= helpers =======================
@@ -237,6 +316,138 @@ def _ground_under_drone(s: Source, sr, tv: float, terrain: str) -> tuple[float |
 @app.get("/api/health")
 def health():
     return {"status": "ok", "sources": len(SOURCES)}
+
+
+class ProjectBody(BaseModel):
+    name: str
+    bin_path: str = ""
+    video_path: str = ""
+    password: str = ""            # vacío = proyecto abierto a escritura
+    meta: dict = {}
+
+
+class ProjectPatch(BaseModel):
+    name: str | None = None
+    bin_path: str | None = None
+    video_path: str | None = None
+    meta: dict | None = None
+    password: str = ""            # la ACTUAL, para autorizar el cambio
+    new_password: str | None = None   # "" quita la protección
+
+
+def _proyecto(pid: str) -> _projects.Project:
+    pr = PROJECTS.get(pid)
+    if not pr:
+        raise HTTPException(404, f"no existe el proyecto: {pid}")
+    return pr
+
+
+def _autorizar(pr: _projects.Project, password: str) -> None:
+    """Escritura: pasa si el proyecto es abierto o la contraseña es correcta."""
+    if not _projects.check_password(password or "", pr.auth):
+        raise HTTPException(401, "contraseña incorrecta")
+
+
+@app.get("/api/projects")
+def projects_list():
+    """Todos los proyectos. Lectura pública; nunca sale el material de la clave."""
+    return [
+        pr.public({"points": PROJECTS.points_count(pr.id),
+                   "has_campaign": PROJECTS.campaign_path(pr.id).exists()})
+        for pr in PROJECTS.list()
+    ]
+
+
+@app.post("/api/projects")
+def projects_create(body: ProjectBody):
+    if not (body.name or "").strip():
+        raise HTTPException(400, "el proyecto necesita un nombre")
+    pr = PROJECTS.create(body.name.strip(), body.bin_path, body.video_path,
+                         body.password, body.meta)
+    return pr.public({"points": 0, "has_campaign": False})
+
+
+@app.get("/api/projects/{pid}")
+def projects_get(pid: str):
+    pr = _proyecto(pid)
+    return pr.public({"points": PROJECTS.points_count(pid),
+                      "has_campaign": PROJECTS.campaign_path(pid).exists()})
+
+
+@app.patch("/api/projects/{pid}")
+def projects_update(pid: str, body: ProjectPatch):
+    pr = _proyecto(pid)
+    _autorizar(pr, body.password)
+    pr = PROJECTS.update(pr, body.model_dump(exclude_unset=True))
+    return pr.public({"points": PROJECTS.points_count(pid),
+                      "has_campaign": PROJECTS.campaign_path(pid).exists()})
+
+
+@app.delete("/api/projects/{pid}")
+def projects_delete(pid: str, password: str = Query("")):
+    pr = _proyecto(pid)
+    _autorizar(pr, password)
+    PROJECTS.delete(pid)
+    return {"ok": True, "deleted": pid}
+
+
+@app.post("/api/projects/{pid}/open")
+def projects_open(pid: str):
+    """Registra el bin+vídeo del proyecto y devuelve el sid de sesión con el que
+    trabajan el resto de endpoints."""
+    pr = _proyecto(pid)
+    if not pr.bin_path or not pr.video_path:
+        raise HTTPException(400, "el proyecto no tiene vídeo y log asignados")
+    for ruta in (pr.bin_path, pr.video_path):
+        if not os.path.exists(ruta):
+            raise HTTPException(400, f"no existe el fichero: {ruta}")
+    src = _register(pr.bin_path, pr.video_path)
+    return {"id": src.id, "key": src.key, "label": src.label, "project": pr.public()}
+
+
+@app.get("/api/projects/{pid}/campaign")
+def projects_campaign_get(pid: str):
+    _proyecto(pid)
+    c = PROJECTS.load_campaign(pid)
+    if c is None:
+        raise HTTPException(404, "el proyecto aún no tiene campaña")
+    return JSONResponse(content=c)
+
+
+@app.put("/api/projects/{pid}/campaign")
+async def projects_campaign_put(pid: str, request: Request,
+                                x_pinpoint_password: str = Header("")):
+    """Guarda la campaña DEL PROYECTO. La contraseña va en cabecera para no
+    dejarla escrita en los logs de acceso del servidor, como pasaría en la URL."""
+    pr = _proyecto(pid)
+    _autorizar(pr, x_pinpoint_password)
+    body = await request.json()
+    if not isinstance(body, dict) or "frames" not in body:
+        raise HTTPException(400, "campaña inválida")
+    body["project_id"] = pid
+    r = PROJECTS.save_campaign(pid, body)
+    return {"ok": True, "project": pid, **r}
+
+
+@app.get("/api/projects/{pid}/backups")
+def projects_backups(pid: str):
+    """Copias de la campaña. Se hace una automáticamente en cada guardado."""
+    _proyecto(pid)
+    return PROJECTS.list_backups(pid)
+
+
+@app.post("/api/projects/{pid}/backups/{nombre}/restore")
+def projects_backup_restore(pid: str, nombre: str,
+                            x_pinpoint_password: str = Header("")):
+    pr = _proyecto(pid)
+    _autorizar(pr, x_pinpoint_password)
+    try:
+        r = PROJECTS.restore_backup(pid, nombre)
+    except ValueError:
+        raise HTTPException(400, "nombre de copia inválido")
+    except FileNotFoundError:
+        raise HTTPException(404, f"no existe la copia: {nombre}")
+    return {"ok": True, "restored": nombre, **r}
 
 
 @app.get("/api/library")

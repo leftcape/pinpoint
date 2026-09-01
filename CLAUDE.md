@@ -40,6 +40,21 @@ tesis.
 4. **Bloquea la campaña** (candado en la pestaña GCP) antes de marcar: congela
    sync, FOV, terreno y deltas. Mezclar configuraciones ensucia el análisis.
 
+## Proyectos (la unidad de trabajo)
+
+Un proyecto = vídeo + log + config + puntos + metadatos, con **id propio**.
+Nació de un fallo real: la campaña se indexaba por hash de las RUTAS, y al
+renombrar `recording_96_visible.mkv` → `test_flight01_visible.mkv` los 100
+puntos del vuelo 1 dejaron de aparecer. Con proyectos, los ficheros se pueden
+mover o renombrar sin perder nada.
+
+- Lectura pública; escritura con contraseña opcional por proyecto, guardada
+  **hasheada** (PBKDF2) y que **nunca sale por la API**. Sin contraseña, abierto.
+- **Copia automática antes de cada guardado** (10 últimas, en
+  `projects/<id>/backups/`), porque un PUT reemplaza la campaña entera. Si los
+  puntos caen a menos de la mitad, la respuesta lo avisa.
+- Al arrancar migra las campañas antiguas y deduplica por contenido.
+
 ## Dónde vive la campaña
 
 `campaign.json` = config (sync, dos FOV y cómo se obtuvo el visual, aspect,

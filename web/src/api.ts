@@ -137,6 +137,27 @@ export interface Library {
   quota: Quota
 }
 
+// --- proyectos ---
+export interface Project {
+  id: string
+  name: string
+  bin_path: string
+  video_path: string
+  meta: Record<string, unknown>
+  created_at: number
+  updated_at: number
+  /** true = pide contraseña para escribir. La contraseña nunca viaja. */
+  protected: boolean
+  points?: number
+  has_campaign?: boolean
+}
+
+export interface Backup {
+  name: string
+  when: number
+  points: number
+}
+
 export interface LibraryUploaded {
   name: string
   path: string
@@ -230,6 +251,85 @@ export const api = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campaign),
+      }),
+    )
+  },
+
+  // --- proyectos ---
+  // Un proyecto agrupa vídeo, log, configuración, puntos y metadatos bajo una
+  // identidad propia: renombrar los ficheros ya no desvincula la campaña.
+  async projectsList() {
+    return j<Project[]>(await fetch('/api/projects'))
+  },
+
+  async projectCreate(body: {
+    name: string; bin_path?: string; video_path?: string
+    password?: string; meta?: Record<string, unknown>
+  }) {
+    return j<Project>(
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    )
+  },
+
+  async projectGet(pid: string) {
+    return j<Project>(await fetch(`/api/projects/${pid}`))
+  },
+
+  async projectUpdate(pid: string, body: Record<string, unknown>) {
+    return j<Project>(
+      await fetch(`/api/projects/${pid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    )
+  },
+
+  async projectDelete(pid: string, password = '') {
+    return j<{ ok: boolean }>(
+      await fetch(`/api/projects/${pid}?password=${encodeURIComponent(password)}`,
+        { method: 'DELETE' }),
+    )
+  },
+
+  // Abre el proyecto: registra su bin+vídeo y devuelve el sid de la sesión.
+  async projectOpen(pid: string) {
+    return j<{ id: string; key: string; label: string; project: Project }>(
+      await fetch(`/api/projects/${pid}/open`, { method: 'POST' }),
+    )
+  },
+
+  async projectCampaignGet(pid: string): Promise<unknown | null> {
+    const r = await fetch(`/api/projects/${pid}/campaign`)
+    if (r.status === 404) return null
+    return j<unknown>(r)
+  },
+
+  // La contraseña va en cabecera, no en la URL: así no acaba escrita en los
+  // logs de acceso del servidor.
+  async projectCampaignPut(pid: string, campaign: unknown, password = '') {
+    return j<{ ok: boolean; frames: number; points: number; warning?: string }>(
+      await fetch(`/api/projects/${pid}/campaign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Pinpoint-Password': password },
+        body: JSON.stringify(campaign),
+      }),
+    )
+  },
+
+  async projectBackups(pid: string) {
+    return j<Backup[]>(await fetch(`/api/projects/${pid}/backups`))
+  },
+
+  async projectRestore(pid: string, nombre: string, password = '') {
+    return j<{ ok: boolean; frames: number; points: number }>(
+      await fetch(`/api/projects/${pid}/backups/${nombre}/restore`, {
+        method: 'POST',
+        headers: { 'X-Pinpoint-Password': password },
       }),
     )
   },

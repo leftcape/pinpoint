@@ -49,6 +49,13 @@ export interface FovPairResult {
 
 interface State {
   sourceId: string | null
+  // Proyecto activo: identidad estable del trabajo (vídeo+log+config+puntos).
+  projectId: string | null
+  projectName: string | null
+  projectProtected: boolean
+  // Contraseña de escritura, solo en memoria de esta pestaña: nunca se
+  // persiste en disco ni en localStorage.
+  projectPassword: string
   log: LogPreview | null
   video: VideoInfo | null
   loading: boolean
@@ -117,6 +124,8 @@ interface State {
   registerSource: (bin: string, video: string) => Promise<void>
   uploadSource: (bin: File, video: File) => Promise<void>
   openSource: (id: string) => Promise<void> // un vuelo ya registrado en el servidor
+  openProject: (pid: string) => Promise<void> // abre un proyecto (vuelo + su campaña)
+  setProjectPassword: (p: string) => void
   setSyncMethod: (m: SyncMethod) => void
   setManualOffset: (o: number) => void
   setCurrentTv: (tv: number) => void
@@ -230,6 +239,10 @@ export const useStore = create<State>((set, get) => {
 
   return {
     sourceId: null,
+    projectId: null,
+    projectName: null,
+    projectProtected: false,
+    projectPassword: '',
     log: null,
     video: null,
     loading: false,
@@ -294,8 +307,26 @@ export const useStore = create<State>((set, get) => {
       }
     },
 
-    async openSource(id) {
+    setProjectPassword(p) {
+      set({ projectPassword: p })
+    },
+
+    async openProject(pid) {
       set({ loading: true, error: null })
+      try {
+        const { id, project } = await api.projectOpen(pid)
+        set({
+          projectId: project.id, projectName: project.name,
+          projectProtected: project.protected,
+        })
+        await loadSource(set, get, applyConfig, id, pid)
+      } catch (e) {
+        set({ error: String(e), loading: false })
+      }
+    },
+
+    async openSource(id) {
+      set({ loading: true, error: null, projectId: null, projectName: null, projectProtected: false })
       try {
         await loadSource(set, get, applyConfig, id)
       } catch (e) {
@@ -863,7 +894,14 @@ export const useStore = create<State>((set, get) => {
       }
       set({ gcpSaveState: 'saving' })
       try {
-        await api.campaignPut(sourceId, gcpCampaign)
+        const { projectId, projectPassword } = get()
+        if (projectId) {
+          const r = await api.projectCampaignPut(projectId, gcpCampaign, projectPassword)
+          // el servidor avisa si la campaña ha encogido mucho (hay copia)
+          if (r.warning) set({ error: r.warning })
+        } else {
+          await api.campaignPut(sourceId, gcpCampaign)
+        }
         set({ gcpSaveState: 'saved' })
       } catch {
         set({ gcpSaveState: 'error' })
@@ -899,6 +937,7 @@ async function loadSource(
   get: () => State,
   applyConfig: (cfg: CampaignConfig) => void,
   id: string,
+  pid?: string,          // proyecto del que viene, si lo hay
 ) {
   const [log, video] = await Promise.all([api.log(id), api.videoInfo(id)])
   set({ sourceId: id, log, video, loading: false, currentTv: 0 })
@@ -914,7 +953,9 @@ async function loadSource(
   // si no, la local si es del mismo vuelo; si no, una nueva.
   let campaign: GcpCampaign | null = null
   try {
-    const remote = await api.campaignGet(id)
+    // Si venimos de un proyecto, su campaña manda: es la que tiene identidad
+    // estable. El endpoint por vuelo queda como respaldo del esquema anterior.
+    const remote = pid ? await api.projectCampaignGet(pid) : await api.campaignGet(id)
     if (remote) campaign = migrateCampaign(remote)
   } catch {
     /* sin servidor de campañas: seguimos con la local */

@@ -7,6 +7,7 @@ import { SyncPanel } from './components/SyncPanel'
 import { LocationPanel } from './components/LocationPanel'
 import { GcpPanel } from './components/GcpPanel'
 import { SourcePicker } from './components/SourcePicker'
+import { ProjectPicker } from './components/ProjectPicker'
 import { LangSwitch } from './components/LangSwitch'
 
 type Tab = 'flight' | 'location' | 'gcp'
@@ -20,6 +21,11 @@ export function App() {
   const fovPairMode = useStore((s) => s.fovPairMode)
   const locked = useStore((s) => s.gcpCampaign.config.locked)
   const saveState = useStore((s) => s.gcpSaveState)
+  const projectId = useStore((s) => s.projectId)
+  const projectName = useStore((s) => s.projectName)
+  const projectProtected = useStore((s) => s.projectProtected)
+  const projectPassword = useStore((s) => s.projectPassword)
+  const setProjectPassword = useStore((s) => s.setProjectPassword)
   const [tab, setTab] = useState<Tab>('flight')
 
   if (!sourceId) {
@@ -28,7 +34,19 @@ export function App() {
         <div className="absolute top-3 right-3">
           <LangSwitch />
         </div>
-        <SourcePicker />
+        {/* Proyectos primero: es la vía normal. Cargar un vuelo suelto sigue
+            disponible debajo para casos puntuales. */}
+        <div className="flex flex-col gap-6 py-8 overflow-y-auto max-h-full">
+          <ProjectPicker />
+          <details className="max-w-xl">
+            <summary className="text-sm text-gray-500 cursor-pointer">
+              {t('proj.orLoadLoose')}
+            </summary>
+            <div className="mt-3">
+              <SourcePicker />
+            </div>
+          </details>
+        </div>
       </div>
     )
   }
@@ -51,11 +69,33 @@ export function App() {
   const saveLabel =
     saveState === 'saved' ? t('app.saved') : saveState === 'saving' ? t('app.saving') : saveState === 'error' ? t('app.noServer') : ''
 
+  // Proyecto protegido y sin contraseña en esta pestaña: avisar ANTES de marcar,
+  // no cuando falle el primer guardado y ya se hayan perdido puntos.
+  const necesitaClave = !!projectId && projectProtected && !projectPassword
+
   return (
     <div className="h-full flex flex-col">
+      {necesitaClave && (
+        <div className="bg-amber-100 text-amber-900 px-4 py-2 text-sm flex items-center gap-3">
+          <span className="flex-1">{t('proj.askPassword')}</span>
+          <input
+            type="password" autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') setProjectPassword((e.target as HTMLInputElement).value)
+            }}
+            onBlur={(e) => setProjectPassword(e.target.value)}
+            className="border border-amber-300 rounded px-2 py-1 text-sm text-gray-900"
+          />
+        </div>
+      )}
       <header className="bg-gray-800 text-white px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="font-semibold">PinPoint</h1>
+          {projectName && (
+            <span className="text-sm text-gray-300 truncate max-w-[24ch]" title={projectName}>
+              · {projectName}{projectProtected && ' 🔒'}
+            </span>
+          )}
           <LangSwitch dark />
         </div>
         <div className="text-xs text-gray-300 font-mono flex items-center gap-3">

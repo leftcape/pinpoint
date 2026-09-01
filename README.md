@@ -109,6 +109,62 @@ tiene uno, el script lo siembra desde `.env.example`.
 
 ---
 
+## Proyectos
+
+Un **proyecto** agrupa todo lo de un vuelo — vídeo, log, configuración, puntos
+de control y metadatos — bajo una identidad propia.
+
+Por qué existe: antes la campaña se guardaba indexada por un hash de las *rutas*
+del `.bin` y del vídeo, así que **renombrar un fichero la dejaba huérfana**
+(pasó de verdad: 100 puntos marcados dejaron de aparecer al renombrar los
+vuelos). El id de un proyecto no depende de dónde estén los ficheros ni de cómo
+se llamen: se pueden mover o reemplazar sin perder el trabajo.
+
+En la pantalla inicial se listan los proyectos y se crea uno nuevo eligiendo
+vídeo y log de los desplegables. Cargar un vuelo suelto sin proyecto sigue
+siendo posible (plegado bajo "o cargar un vuelo suelto").
+
+### Lectura pública, escritura protegida
+
+Cada proyecto puede tener una **contraseña de escritura**:
+
+- **Leer es siempre público**: cualquiera puede abrir el proyecto y ver los puntos.
+- **Guardar** exige la contraseña, si el proyecto la tiene. Sin contraseña
+  definida, el proyecto es abierto (útil en una instancia en red privada).
+- Se guarda **hasheada** (PBKDF2-SHA256 con sal, 200 000 iteraciones). El texto
+  no se guarda nunca, y **ni el hash ni la sal salen por la API**: si salieran,
+  la protección sería decorativa, porque el proyecto es público en lectura.
+- Si se pierde, **no se puede recuperar**: hay que quitarla editando el
+  `project.json` del servidor.
+- La contraseña vive solo en la memoria de la pestaña, y viaja en una cabecera
+  (`X-Pinpoint-Password`), no en la URL, para que no acabe en los logs de acceso.
+
+Ojo con el alcance: esto protege del accidente y del curioso. Sobre HTTP en
+claro y sin sesiones, no es una defensa contra alguien decidido — no confíes al
+servidor nada que no pueda ser público.
+
+### Copias de seguridad
+
+Guardar una campaña la reemplaza entera, y son horas de marcado. Por eso
+**antes de cada guardado se hace una copia** en `projects/<id>/backups/` (se
+conservan las 10 últimas). Si el número de puntos cae a menos de la mitad, la
+respuesta lo avisa y la interfaz lo muestra.
+
+```
+GET  /api/projects/<id>/backups                      lista de copias
+POST /api/projects/<id>/backups/<nombre>/restore     recuperar una
+```
+
+### Migración automática
+
+Al arrancar, las campañas del esquema anterior (`campaigns/<hash>.json`) se
+convierten en proyectos. Los ficheros originales **no se borran**. Si la misma
+campaña estaba guardada bajo dos claves (por ejemplo tras renombrar y copiar),
+se detecta por el contenido y se crea **un solo proyecto**, con las rutas que
+existen de verdad.
+
+---
+
 ## La carpeta de vuelos y su cuota
 
 PinPoint lee los vuelos de **una carpeta del servidor** y la muestra en la
