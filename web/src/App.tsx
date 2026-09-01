@@ -27,6 +27,8 @@ export function App() {
   const projectPassword = useStore((s) => s.projectPassword)
   const setProjectPassword = useStore((s) => s.setProjectPassword)
   const [tab, setTab] = useState<Tab>('flight')
+  // Modo lectura: se ha decidido mirar sin contraseña. Solo afecta al aviso.
+  const [readOnly, setReadOnly] = useState(false)
 
   if (!sourceId) {
     return (
@@ -67,7 +69,10 @@ export function App() {
   const mapCls = split ? splitRight : swapView ? pipStyle : bigStyle
 
   const saveLabel =
-    saveState === 'saved' ? t('app.saved') : saveState === 'saving' ? t('app.saving') : saveState === 'error' ? t('app.noServer') : ''
+    saveState === 'saved' ? t('app.saved')
+      : saveState === 'saving' ? t('app.saving')
+      : saveState === 'readonly' ? t('app.readonly')
+      : saveState === 'error' ? t('app.noServer') : ''
 
   // Proyecto protegido y sin contraseña en esta pestaña: avisar ANTES de marcar,
   // no cuando falle el primer guardado y ya se hayan perdido puntos.
@@ -75,9 +80,9 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col">
-      {necesitaClave && (
-        <div className="bg-amber-100 text-amber-900 px-4 py-2 text-sm flex items-center gap-3">
-          <span className="flex-1">{t('proj.askPassword')}</span>
+      {necesitaClave && !readOnly && (
+        <div className="bg-amber-100 text-amber-900 px-4 py-2 text-sm flex items-center gap-3 flex-wrap">
+          <span className="flex-1 min-w-[16rem]">{t('proj.askPassword')}</span>
           <input
             type="password" autoFocus
             onKeyDown={(e) => {
@@ -86,6 +91,18 @@ export function App() {
             onBlur={(e) => setProjectPassword(e.target.value)}
             className="border border-amber-300 rounded px-2 py-1 text-sm text-gray-900"
           />
+          {/* Se puede seguir sin contraseña: leer no la necesita. */}
+          <button onClick={() => setReadOnly(true)} className="text-xs underline">
+            {t('proj.justRead')}
+          </button>
+        </div>
+      )}
+      {necesitaClave && readOnly && (
+        <div className="bg-gray-100 text-gray-600 px-4 py-1.5 text-xs flex items-center gap-3">
+          <span className="flex-1">👁 {t('proj.readOnly')}</span>
+          <button onClick={() => setReadOnly(false)} className="underline">
+            {t('proj.enterPassword')}
+          </button>
         </div>
       )}
       <header className="bg-gray-800 text-white px-4 py-2 flex items-center justify-between">

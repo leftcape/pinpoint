@@ -34,7 +34,7 @@ import {
 } from './sampler/gcp'
 import { t } from './i18n'
 
-export type SaveState = 'idle' | 'saving' | 'saved' | 'local-only' | 'error'
+export type SaveState = 'idle' | 'saving' | 'saved' | 'local-only' | 'error' | 'readonly'
 
 export interface FovPairResult {
   fov_h_deg: number
@@ -894,7 +894,13 @@ export const useStore = create<State>((set, get) => {
       }
       set({ gcpSaveState: 'saving' })
       try {
-        const { projectId, projectPassword } = get()
+        const { projectId, projectPassword, projectProtected } = get()
+        // Proyecto protegido y sin contraseña: no intentar guardar. El 401 en
+        // bucle llenaría la pantalla de errores mientras solo se está mirando.
+        if (projectId && projectProtected && !projectPassword) {
+          set({ gcpSaveState: 'readonly' })
+          return
+        }
         if (projectId) {
           const r = await api.projectCampaignPut(projectId, gcpCampaign, projectPassword)
           // el servidor avisa si la campaña ha encogido mucho (hay copia)
