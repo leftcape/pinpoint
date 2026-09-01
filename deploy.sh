@@ -104,21 +104,28 @@ ssh ${SSH_OPTS} "${REMOTE}" "cd ${REMOTE_DIR} && docker compose up -d --build"
 echo "==> Verificando ..."
 ssh ${SSH_OPTS} "${REMOTE}" "docker ps --filter name=pinpoint --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
 
-PORT=$(grep -E '^PINPOINT_PORT=' "$SCRIPT_DIR/.env" | cut -d= -f2-)
+# El puerto se lee del .env DEL SERVIDOR: el local puede ser otro.
+PORT=$(ssh ${SSH_OPTS} "${REMOTE}" "grep -E '^PINPOINT_PORT=' '${REMOTE_DIR}/.env' 2>/dev/null | cut -d= -f2-")
+PORT="${PORT:-8096}"
 
-# La biblioteca tiene que existir y ser escribible dentro del contenedor, o los
-# desplegables saldrán vacíos y las subidas fallarán.
+# Estado real de la biblioteca, preguntándoselo a la PROPIA app: es su usuario
+# dentro del contenedor quien tiene que poder leer y escribir, no el del host.
 echo "==> Comprobando la biblioteca de vuelos ..."
+sleep 3   # dar tiempo a que el contenedor levante antes de preguntarle
 ssh ${SSH_OPTS} "${REMOTE}" "
-    cd '${REMOTE_DIR}'
-    lib=\$(grep -E '^PINPOINT_LIBRARY=' .env 2>/dev/null | cut -d= -f2-)
-    lib=\${lib:-/mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico}
-    if [ -d \"\$lib\" ]; then
-        echo \"    \$lib: \$(find \"\$lib\" -maxdepth 2 -type f | wc -l) ficheros, \$(du -sh \"\$lib\" 2>/dev/null | cut -f1)\"
-        [ -w \"\$lib\" ] && echo '    escritura: OK' || echo '    ⚠ sin permiso de escritura: las subidas fallarán'
-    else
-        echo \"    ⚠ no existe: \$lib\"
-    fi
+    curl -sf --max-time 15 http://localhost:${PORT}/api/library 2>/dev/null \
+    | python3 -c \"
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: print('    (no se pudo consultar /api/library)'); sys.exit()
+q=d['quota']
+print('    ' + d['dir'])
+print('    %d vídeos · %d logs · %.2f/%.0f GB (%.1f%%)' % (
+    len(d['videos']), len(d['logs']), q['used']/1024**3, q['limit']/1024**3, q['pct']))
+if not d['exists']: print('    ⚠ la carpeta no existe dentro del contenedor')
+elif not d['writable']: print('    ⚠ solo lectura: las subidas estarán desactivadas')
+else: print('    escritura: OK')
+\"
 "
 
 echo "==> Despliegue completado"
