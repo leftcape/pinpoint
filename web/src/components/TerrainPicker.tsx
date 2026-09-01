@@ -8,7 +8,8 @@ export function TerrainPicker({ compact = false }: { compact?: boolean }) {
   const terrain = useStore((s) => s.terrain)
   const setTerrain = useStore((s) => s.setTerrain)
   const terrainEffective = useStore((s) => s.terrainEffective)
-  const locked = useStore((s) => s.gcpCampaign.config.locked)
+  // En modo lectura vale lo mismo que bloqueado: no se puede escribir.
+  const locked = useStore((s) => s.gcpCampaign.config.locked || s.readOnly)
 
   const help =
     terrain === 'flat'

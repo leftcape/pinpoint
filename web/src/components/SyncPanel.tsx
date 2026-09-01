@@ -31,7 +31,8 @@ export function SyncPanel() {
   const setNadirThr = useStore((s) => s.setNadirThr)
   const tuning = useStore((s) => s.tuning)
   const setTuning = useStore((s) => s.setTuning)
-  const locked = useStore((s) => s.gcpCampaign.config.locked)
+  // En modo lectura vale lo mismo que bloqueado: no se puede escribir.
+  const locked = useStore((s) => s.gcpCampaign.config.locked || s.readOnly)
 
   const reasonLabel = (reason: string) =>
     ({ pitch: t('sync.reasonPitch'), roll: t('sync.reasonRoll'), agl: t('sync.reasonAgl') })[reason] ?? reason

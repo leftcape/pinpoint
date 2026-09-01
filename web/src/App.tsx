@@ -28,8 +28,9 @@ export function App() {
   const projectPassword = useStore((s) => s.projectPassword)
   const setProjectPassword = useStore((s) => s.setProjectPassword)
   const [tab, setTab] = useState<Tab>('flight')
-  // Modo lectura: se ha decidido mirar sin contraseña. Solo afecta al aviso.
-  const [readOnly, setReadOnly] = useState(false)
+  // El usuario ha elegido mirar sin contraseña: solo cambia el aviso que se
+  // muestra. El bloqueo real de la edición lo lleva `readOnly` del store.
+  const [aceptaSoloLectura, setAceptaSoloLectura] = useState(false)
 
   if (!sourceId) {
     return (
@@ -82,17 +83,17 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col">
-      {necesitaClave && !readOnly && (
+      {necesitaClave && !aceptaSoloLectura && (
         <BarraClave
           projectId={projectId!}
           onOk={(p) => setProjectPassword(p)}
-          onSoloLeer={() => setReadOnly(true)}
+          onSoloLeer={() => setAceptaSoloLectura(true)}
         />
       )}
-      {necesitaClave && readOnly && (
+      {necesitaClave && aceptaSoloLectura && (
         <div className="bg-gray-100 text-gray-600 px-4 py-1.5 text-xs flex items-center gap-3">
           <span className="flex-1">👁 {t('proj.readOnly')}</span>
-          <button onClick={() => setReadOnly(false)} className="underline">
+          <button onClick={() => setAceptaSoloLectura(false)} className="underline">
             {t('proj.enterPassword')}
           </button>
         </div>

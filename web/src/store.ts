@@ -57,6 +57,9 @@ interface State {
   // Contraseña de escritura, solo en memoria de esta pestaña: nunca se
   // persiste en disco ni en localStorage.
   projectPassword: string
+  /** true = el proyecto pide contraseña y no la tenemos: no se puede escribir.
+   *  Los paneles lo usan para deshabilitar sus controles. */
+  readOnly: boolean
   log: LogPreview | null
   video: VideoInfo | null
   loading: boolean
@@ -196,7 +199,17 @@ export const useStore = create<State>((set, get) => {
   // ---- helpers internos (no forman parte del State) ----
 
   // Persiste la campaña: estado + localStorage ahora, servidor con retardo.
+  // ¿Se puede escribir? Falso si el proyecto pide contraseña y no la tenemos.
+  // Todo cambio de la campaña pasa por `persist`, así que basta cortar aquí
+  // para que en modo lectura nada quede a medias (cambiado en pantalla pero no
+  // en el servidor, que era lo que despistaba con el candado).
+  const canWrite = () => {
+    const s = get()
+    return !(s.projectId && s.projectProtected && !s.projectPassword)
+  }
+
   const persist = (next: GcpCampaign) => {
+    if (!canWrite()) return
     const stamped = { ...next, updated_at: new Date().toISOString() }
     set({ gcpCampaign: stamped, gcpStorageFull: !saveCampaign(stamped) })
     if (saveTimer) clearTimeout(saveTimer)
@@ -244,6 +257,7 @@ export const useStore = create<State>((set, get) => {
     projectName: null,
     projectProtected: false,
     projectPassword: '',
+    readOnly: false,
     log: null,
     video: null,
     loading: false,
@@ -309,7 +323,8 @@ export const useStore = create<State>((set, get) => {
     },
 
     setProjectPassword(p) {
-      set({ projectPassword: p })
+      const { projectId, projectProtected } = get()
+      set({ projectPassword: p, readOnly: !!projectId && projectProtected && !p })
     },
 
     async openProject(pid) {
@@ -319,6 +334,8 @@ export const useStore = create<State>((set, get) => {
         set({
           projectId: project.id, projectName: project.name,
           projectProtected: project.protected,
+          // sin contraseña todavía: se entra en lectura y la barra la pide
+          readOnly: project.protected && !get().projectPassword,
         })
         await loadSource(set, get, applyConfig, id, pid)
       } catch (e) {
@@ -327,7 +344,7 @@ export const useStore = create<State>((set, get) => {
     },
 
     async openSource(id) {
-      set({ loading: true, error: null, projectId: null, projectName: null, projectProtected: false })
+      set({ loading: true, error: null, projectId: null, projectName: null, projectProtected: false, readOnly: false })
       try {
         await loadSource(set, get, applyConfig, id)
       } catch (e) {

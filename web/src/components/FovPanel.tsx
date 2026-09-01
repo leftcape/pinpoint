@@ -18,7 +18,9 @@ import { TerrainPicker } from './TerrainPicker'
 export function FovPanel() {
   const t = useT()
   const cfg = useStore((s) => s.gcpCampaign.config)
-  const locked = cfg.locked
+  // En modo lectura vale lo mismo que bloqueado: no se puede escribir.
+  const readOnly = useStore((s) => s.readOnly)
+  const locked = cfg.locked || readOnly
   const tuning = useStore((s) => s.tuning)
   const setTuning = useStore((s) => s.setTuning)
   const video = useStore((s) => s.video)

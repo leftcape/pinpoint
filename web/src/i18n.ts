@@ -16,6 +16,7 @@ const es = {
 
   'app.reencoded': '⚠ recodificado',
   'app.readonly': 'solo lectura',
+  'gcp.needPassword': 'Modo lectura: introduce la contraseña del proyecto para poder editar.',
   'app.badpass': '⚠ contraseña incorrecta: NO se está guardando',
   'app.saved': 'guardada',
   'app.saving': 'guardando…',
@@ -339,6 +340,7 @@ const en: Record<Key, string> = {
 
   'app.reencoded': '⚠ re-encoded',
   'app.readonly': 'read-only',
+  'gcp.needPassword': 'Read-only: enter the project password to edit.',
   'app.badpass': '⚠ wrong password: NOT saving',
   'app.saved': 'saved',
   'app.saving': 'saving…',

@@ -31,6 +31,7 @@ function CampaignConfig() {
   const t = useT()
   const c = useStore((s) => s.gcpCampaign)
   const setLocked = useStore((s) => s.setLocked)
+  const readOnly = useStore((s) => s.readOnly)
   const saveState = useStore((s) => s.gcpSaveState)
   const storageFull = useStore((s) => s.gcpStorageFull)
   const cfg = c.config
@@ -50,14 +51,20 @@ function CampaignConfig() {
 
   return (
     <div className={`rounded border p-2 flex flex-col gap-1 text-xs ${cfg.locked ? 'bg-amber-50 border-amber-300' : 'bg-gray-50'}`}>
+      {readOnly && (
+        <div className="text-[11px] text-gray-600 bg-gray-100 border rounded p-1.5">
+          👁 {t('gcp.needPassword')}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <span className="font-semibold text-gray-700">
           {t('gcp.config')} {cfg.locked ? '🔒' : '🔓'}
         </span>
         <button
           onClick={() => setLocked(!cfg.locked)}
-          className={`px-2 py-0.5 rounded border text-[11px] ${cfg.locked ? 'bg-white text-amber-800' : 'bg-amber-500 text-white border-amber-500'}`}
-          title={t('gcp.lockHint')}
+          disabled={readOnly}
+          className={`px-2 py-0.5 rounded border text-[11px] disabled:opacity-40 disabled:cursor-not-allowed ${cfg.locked ? 'bg-white text-amber-800' : 'bg-amber-500 text-white border-amber-500'}`}
+          title={readOnly ? t('gcp.needPassword') : t('gcp.lockHint')}
         >
           {cfg.locked ? t('gcp.unlock') : t('gcp.lock')}
         </button>
