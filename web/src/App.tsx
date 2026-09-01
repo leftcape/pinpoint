@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { api } from './api'
 import { useStore } from './store'
 import { useT } from './i18n'
 import { MapView } from './components/MapView'
@@ -72,6 +73,7 @@ export function App() {
     saveState === 'saved' ? t('app.saved')
       : saveState === 'saving' ? t('app.saving')
       : saveState === 'readonly' ? t('app.readonly')
+      : saveState === 'badpass' ? t('app.badpass')
       : saveState === 'error' ? t('app.noServer') : ''
 
   // Proyecto protegido y sin contraseña en esta pestaña: avisar ANTES de marcar,
@@ -81,21 +83,11 @@ export function App() {
   return (
     <div className="h-full flex flex-col">
       {necesitaClave && !readOnly && (
-        <div className="bg-amber-100 text-amber-900 px-4 py-2 text-sm flex items-center gap-3 flex-wrap">
-          <span className="flex-1 min-w-[16rem]">{t('proj.askPassword')}</span>
-          <input
-            type="password" autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') setProjectPassword((e.target as HTMLInputElement).value)
-            }}
-            onBlur={(e) => setProjectPassword(e.target.value)}
-            className="border border-amber-300 rounded px-2 py-1 text-sm text-gray-900"
-          />
-          {/* Se puede seguir sin contraseña: leer no la necesita. */}
-          <button onClick={() => setReadOnly(true)} className="text-xs underline">
-            {t('proj.justRead')}
-          </button>
-        </div>
+        <BarraClave
+          projectId={projectId!}
+          onOk={(p) => setProjectPassword(p)}
+          onSoloLeer={() => setReadOnly(true)}
+        />
       )}
       {necesitaClave && readOnly && (
         <div className="bg-gray-100 text-gray-600 px-4 py-1.5 text-xs flex items-center gap-3">
@@ -180,5 +172,56 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
+  )
+}
+
+// Barra de contraseña. Valida CONTRA EL SERVIDOR al enviarla: si no, el usuario
+// no se entera de que se equivocó hasta el primer guardado —que puede ser mucho
+// después— y mientras cree que está guardando.
+function BarraClave({ projectId, onOk, onSoloLeer }: {
+  projectId: string
+  onOk: (password: string) => void
+  onSoloLeer: () => void
+}) {
+  const t = useT()
+  const [valor, setValor] = useState('')
+  const [estado, setEstado] = useState<'idle' | 'comprobando' | 'mal'>('idle')
+
+  async function comprobar() {
+    if (!valor) return
+    setEstado('comprobando')
+    try {
+      const r = await api.projectVerify(projectId, valor)
+      if (r.ok) onOk(valor)          // correcta: el aviso desaparece solo
+      else setEstado('mal')
+    } catch {
+      setEstado('mal')
+    }
+  }
+
+  const mal = estado === 'mal'
+  return (
+    <div className={`px-4 py-2 text-sm flex items-center gap-3 flex-wrap ${
+      mal ? 'bg-red-100 text-red-900' : 'bg-amber-100 text-amber-900'}`}>
+      <span className="flex-1 min-w-[16rem]">
+        {mal ? t('proj.wrongPassword') : t('proj.askPassword')}
+      </span>
+      <input
+        type="password" autoFocus value={valor}
+        onChange={(e) => { setValor(e.target.value); if (mal) setEstado('idle') }}
+        onKeyDown={(e) => { if (e.key === 'Enter') comprobar() }}
+        className={`border rounded px-2 py-1 text-sm text-gray-900 ${
+          mal ? 'border-red-400' : 'border-amber-300'}`}
+      />
+      <button
+        onClick={comprobar} disabled={!valor || estado === 'comprobando'}
+        className="text-xs px-2 py-1 rounded bg-gray-800 text-white disabled:opacity-50"
+      >
+        {estado === 'comprobando' ? '…' : t('proj.usePassword')}
+      </button>
+      <button onClick={onSoloLeer} className="text-xs underline">
+        {t('proj.justRead')}
+      </button>
+    </div>
   )
 }

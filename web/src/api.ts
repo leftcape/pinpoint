@@ -167,8 +167,18 @@ export interface LibraryUploaded {
 }
 
 
+/** Error de la API que conserva el código: permite distinguir un 401
+ *  (contraseña incorrecta) de una caída de red, que no son lo mismo. */
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, body: string) {
+    super(`${status}: ${body}`)
+    this.status = status
+  }
+}
+
 async function j<T>(r: Response): Promise<T> {
-  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`)
+  if (!r.ok) throw new ApiError(r.status, await r.text())
   return r.json() as Promise<T>
 }
 
@@ -317,6 +327,17 @@ export const api = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-Pinpoint-Password': password },
         body: JSON.stringify(campaign),
+      }),
+    )
+  },
+
+  // ¿Sirve esta contraseña? Se usa al escribirla, para avisar en el momento y
+  // no en el primer guardado (que puede ser mucho después).
+  async projectVerify(pid: string, password: string) {
+    return j<{ ok: boolean; protected: boolean }>(
+      await fetch(`/api/projects/${pid}/verify`, {
+        method: 'POST',
+        headers: { 'X-Pinpoint-Password': password },
       }),
     )
   },

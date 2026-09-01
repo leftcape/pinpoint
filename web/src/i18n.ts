@@ -16,6 +16,7 @@ const es = {
 
   'app.reencoded': '⚠ recodificado',
   'app.readonly': 'solo lectura',
+  'app.badpass': '⚠ contraseña incorrecta: NO se está guardando',
   'app.saved': 'guardada',
   'app.saving': 'guardando…',
   'app.noServer': '⚠ sin servidor',
@@ -47,6 +48,7 @@ const es = {
   'proj.isProtected': 'Protegido: pide contraseña para guardar',
   'proj.askPassword': 'Este proyecto pide contraseña para guardar. Puedes verlo sin ella.',
   'proj.justRead': 'solo mirar',
+  'proj.usePassword': 'Entrar',
   'proj.readOnly': 'Modo lectura: puedes verlo todo, pero los cambios no se guardarán.',
   'proj.enterPassword': 'introducir contraseña',
   'proj.orLoadLoose': 'o cargar un vuelo suelto (sin proyecto)',
@@ -337,6 +339,7 @@ const en: Record<Key, string> = {
 
   'app.reencoded': '⚠ re-encoded',
   'app.readonly': 'read-only',
+  'app.badpass': '⚠ wrong password: NOT saving',
   'app.saved': 'saved',
   'app.saving': 'saving…',
   'app.noServer': '⚠ no server',
@@ -368,6 +371,7 @@ const en: Record<Key, string> = {
   'proj.isProtected': 'Protected: asks for a password to save',
   'proj.askPassword': 'This project needs a password to save. You can view it without one.',
   'proj.justRead': 'just look',
+  'proj.usePassword': 'Enter',
   'proj.readOnly': 'Read-only: you can see everything, but changes will not be saved.',
   'proj.enterPassword': 'enter password',
   'proj.orLoadLoose': 'or load a loose flight (no project)',

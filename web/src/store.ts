@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { groundToPixel } from './warp'
 import {
+  ApiError,
   api,
   type LogPreview,
   type VideoInfo,
@@ -34,7 +35,7 @@ import {
 } from './sampler/gcp'
 import { t } from './i18n'
 
-export type SaveState = 'idle' | 'saving' | 'saved' | 'local-only' | 'error' | 'readonly'
+export type SaveState = 'idle' | 'saving' | 'saved' | 'local-only' | 'error' | 'readonly' | 'badpass'
 
 export interface FovPairResult {
   fov_h_deg: number
@@ -909,8 +910,11 @@ export const useStore = create<State>((set, get) => {
           await api.campaignPut(sourceId, gcpCampaign)
         }
         set({ gcpSaveState: 'saved' })
-      } catch {
-        set({ gcpSaveState: 'error' })
+      } catch (e) {
+        // Un 401 no es "no hay servidor": es la contraseña. Decirlo bien, o el
+        // usuario busca el fallo donde no está.
+        const authFail = e instanceof ApiError && e.status === 401
+        set({ gcpSaveState: authFail ? 'badpass' : 'error' })
       }
     },
 

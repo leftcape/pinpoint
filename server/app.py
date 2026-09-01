@@ -429,6 +429,19 @@ async def projects_campaign_put(pid: str, request: Request,
     return {"ok": True, "project": pid, **r}
 
 
+@app.post("/api/projects/{pid}/verify")
+def projects_verify(pid: str, x_pinpoint_password: str = Header("")):
+    """¿Vale esta contraseña para escribir en el proyecto? Solo responde sí/no.
+
+    Existe para poder avisar EN EL MOMENTO en que se escribe. Sin esto el
+    usuario no se entera de que se equivocó hasta el primer guardado, que puede
+    ser media hora de marcado después.
+    """
+    pr = _proyecto(pid)
+    ok = _projects.check_password(x_pinpoint_password or "", pr.auth)
+    return {"ok": ok, "protected": bool(pr.auth)}
+
+
 @app.get("/api/projects/{pid}/backups")
 def projects_backups(pid: str):
     """Copias de la campaña. Se hace una automáticamente en cada guardado."""
