@@ -25,7 +25,7 @@ export function App() {
   const projectId = useStore((s) => s.projectId)
   const projectName = useStore((s) => s.projectName)
   const projectProtected = useStore((s) => s.projectProtected)
-  const projectPassword = useStore((s) => s.projectPassword)
+  const readOnlyStore = useStore((s) => s.readOnly)
   const setProjectPassword = useStore((s) => s.setProjectPassword)
   const [tab, setTab] = useState<Tab>('flight')
   // El usuario ha elegido mirar sin contraseña: solo cambia el aviso que se
@@ -77,9 +77,10 @@ export function App() {
       : saveState === 'badpass' ? t('app.badpass')
       : saveState === 'error' ? t('app.noServer') : ''
 
-  // Proyecto protegido y sin contraseña en esta pestaña: avisar ANTES de marcar,
-  // no cuando falle el primer guardado y ya se hayan perdido puntos.
-  const necesitaClave = !!projectId && projectProtected && !projectPassword
+  // Una única fuente de verdad: el `readOnly` del store, que es el mismo que
+  // bloquea los controles. Antes se recalculaba aquí en paralelo y los dos
+  // podían discrepar, dejando "read-only" sin barra para introducir la clave.
+  const necesitaClave = readOnlyStore
 
   return (
     <div className="h-full flex flex-col">
@@ -105,6 +106,16 @@ export function App() {
             <span className="text-sm text-gray-300 truncate max-w-[24ch]" title={projectName}>
               · {projectName}{projectProtected && ' 🔒'}
             </span>
+          )}
+          {/* Salida siempre disponible del modo lectura, pase lo que pase con
+              el resto de la interfaz. */}
+          {readOnlyStore && (
+            <button
+              onClick={() => setAceptaSoloLectura(false)}
+              className="text-xs px-2 py-0.5 rounded bg-amber-500 text-white"
+            >
+              🔑 {t('proj.enterPassword')}
+            </button>
           )}
           <LangSwitch dark />
         </div>

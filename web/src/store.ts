@@ -328,14 +328,18 @@ export const useStore = create<State>((set, get) => {
     },
 
     async openProject(pid) {
-      set({ loading: true, error: null })
+      // La contraseña se limpia SIEMPRE al abrir: pertenece a un proyecto y a
+      // una sesión concretos. Si quedaba una de antes (aunque fuese
+      // incorrecta), el aviso no se mostraba —porque ya "había" contraseña— y
+      // entonces no había forma de introducir la buena: atrapado en lectura.
+      set({ loading: true, error: null, projectPassword: '' })
       try {
         const { id, project } = await api.projectOpen(pid)
         set({
           projectId: project.id, projectName: project.name,
           projectProtected: project.protected,
           // sin contraseña todavía: se entra en lectura y la barra la pide
-          readOnly: project.protected && !get().projectPassword,
+          readOnly: project.protected,
         })
         await loadSource(set, get, applyConfig, id, pid)
       } catch (e) {
