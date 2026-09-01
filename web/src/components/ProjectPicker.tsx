@@ -11,6 +11,7 @@ export function ProjectPicker() {
   const [proyectos, setProyectos] = useState<Project[]>([])
   const [lib, setLib] = useState<Library | null>(null)
   const [nuevo, setNuevo] = useState(false)
+  const [editando, setEditando] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   // formulario de alta
@@ -97,26 +98,96 @@ export function ProjectPicker() {
 
       <div className="flex flex-col gap-1">
         {proyectos.map((p) => (
-          <div key={p.id} className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2">
-            <div className="min-w-0">
-              <div className="text-sm font-medium truncate">
-                {p.name}
-                {p.protected && <span className="ml-1 text-gray-400" title={t('proj.isProtected')}>🔒</span>}
+          <div key={p.id} className="rounded border bg-white px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {p.name}
+                  {p.protected && <span className="ml-1 text-gray-400" title={t('proj.isProtected')}>🔒</span>}
+                </div>
+                <div className="text-xs text-gray-500 truncate" title={`${p.bin_path}\n${p.video_path}`}>
+                  {p.points ? `${p.points} ${t('proj.points')}` : t('proj.noPoints')}
+                  {p.video_path && ` · ${p.video_path.split('/').pop()}`}
+                </div>
               </div>
-              <div className="text-xs text-gray-500 truncate" title={`${p.bin_path}\n${p.video_path}`}>
-                {p.points ? `${p.points} ${t('proj.points')}` : t('proj.noPoints')}
-                {p.video_path && ` · ${p.video_path.split('/').pop()}`}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setEditando(editando === p.id ? null : p.id)}
+                  className="px-2 py-1 text-xs rounded border"
+                  title={t('proj.changePassword')}
+                >
+                  🔑
+                </button>
+                <button
+                  onClick={() => openProject(p.id)} disabled={loading || !p.bin_path || !p.video_path}
+                  className="px-3 py-1 text-sm rounded border bg-gray-800 text-white disabled:opacity-50"
+                >
+                  {t('src.open')}
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => openProject(p.id)} disabled={loading || !p.bin_path || !p.video_path}
-              className="px-3 py-1 text-sm rounded border bg-gray-800 text-white disabled:opacity-50 shrink-0"
-            >
-              {t('src.open')}
-            </button>
+            {editando === p.id && <PanelClave proyecto={p} onDone={() => { setEditando(null); recargar() }} />}
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Poner, cambiar o quitar la contraseña de un proyecto existente.
+// Si ya tiene una, hace falta la actual para cambiarla.
+function PanelClave({ proyecto, onDone }: { proyecto: Project; onDone: () => void }) {
+  const t = useT()
+  const [actual, setActual] = useState('')
+  const [nueva, setNueva] = useState('')
+  const [msg, setMsg] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+
+  async function guardar() {
+    setOcupado(true); setMsg('')
+    try {
+      await api.projectUpdate(proyecto.id, { password: actual, new_password: nueva })
+      onDone()
+    } catch (e: any) {
+      setMsg(e?.message?.includes('401') || /contrase/i.test(e?.message ?? '')
+        ? t('proj.wrongPassword') : (e?.message ?? String(e)))
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t flex flex-col gap-2">
+      {proyecto.protected && (
+        <>
+          <label className="text-xs text-gray-500">{t('proj.currentPassword')}</label>
+          <input
+            type="password" value={actual} onChange={(e) => setActual(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
+        </>
+      )}
+      <label className="text-xs text-gray-500">{t('proj.newPassword')}</label>
+      <input
+        type="password" value={nueva} onChange={(e) => setNueva(e.target.value)}
+        placeholder={t('proj.newPasswordPlaceholder')}
+        className="border rounded px-2 py-1 text-sm"
+      />
+      <p className="text-xs text-gray-400">
+        {nueva ? t('proj.willProtect') : t('proj.willOpen')}
+      </p>
+      <div className="flex gap-2">
+        <button
+          onClick={guardar} disabled={ocupado}
+          className="bg-blue-600 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+        >
+          {ocupado ? '…' : t('proj.savePassword')}
+        </button>
+        <button onClick={onDone} className="rounded border px-3 py-1 text-sm">
+          {t('proj.cancel')}
+        </button>
+      </div>
+      {msg && <div className="text-red-600 text-xs">{msg}</div>}
     </div>
   )
 }
