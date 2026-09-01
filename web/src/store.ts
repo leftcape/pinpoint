@@ -324,7 +324,12 @@ export const useStore = create<State>((set, get) => {
 
     setProjectPassword(p) {
       const { projectId, projectProtected } = get()
-      set({ projectPassword: p, readOnly: !!projectId && projectProtected && !p })
+      const ro = !!projectId && projectProtected && !p
+      set({ projectPassword: p, readOnly: ro })
+      // Con contraseña buena recién puesta, guardar YA: si no, la cabecera se
+      // queda con el "read-only" del último intento y parece que no entró.
+      // De paso confirma contra el servidor que la escritura funciona.
+      if (!ro) void get().gcpSaveNow()
     },
 
     async openProject(pid) {
