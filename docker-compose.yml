@@ -17,9 +17,14 @@ services:
     volumes:
       # datos de trabajo: fuentes registradas/subidas (bin + vídeo)
       - ${PINPOINT_DATA_HOST:-./pinpoint-data}:/pinpoint-data
-      # carpeta de vuelos del servidor (.bin + vídeos), SOLO LECTURA. Se monta
-      # en la MISMA ruta que en el host para que el modo "Ruta en servidor"
-      # acepte rutas absolutas tal cual (p.ej. /mnt/data/srv/...).
-      - ${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}:${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}:ro
+      # carpeta de vuelos del servidor (.bin + vídeos). Se monta en la MISMA
+      # ruta que en el host para que "Ruta en servidor" acepte rutas absolutas
+      # tal cual (p.ej. /mnt/data/srv/...).
+      # LECTURA-ESCRITURA: las subidas de la biblioteca aterrizan aquí. Lo que
+      # acota el consumo es PINPOINT_QUOTA_GB, no el modo de montaje.
+      - ${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}:${PINPOINT_SOURCE_MOUNT:-/mnt/data/srv/carto_private}
     environment:
       - PINPOINT_DATA=/pinpoint-data
+      # biblioteca de vuelos (desplegables + destino de las subidas) y su tope
+      - PINPOINT_LIBRARY=${PINPOINT_LIBRARY:-/mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico}
+      - PINPOINT_QUOTA_GB=${PINPOINT_QUOTA_GB:-25}

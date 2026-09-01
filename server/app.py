@@ -55,6 +55,68 @@ CAMPAIGNS_DIR.mkdir(parents=True, exist_ok=True)
 # registrar, así "sources" no vuelve a 0 con cada reinicio.
 REGISTRY_PATH = DATA_DIR / "registry.json"
 
+# --- biblioteca de vuelos ---
+# Carpeta del servidor donde viven los vídeos y los logs. La pantalla inicial la
+# lista en dos desplegables (vídeos y .bin) y las subidas van aquí, así todo el
+# material está en un único sitio y la cuota lo cubre entero.
+LIBRARY_DIR = Path(os.environ.get(
+    "PINPOINT_LIBRARY", "/mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico"))
+# Tope de ocupación de esa carpeta. Al alcanzarlo se rechazan las subidas
+# nuevas; nunca se borra nada por su cuenta (son datos de campaña).
+LIBRARY_QUOTA_BYTES = int(float(os.environ.get("PINPOINT_QUOTA_GB", "25")) * 1024 ** 3)
+
+VIDEO_EXT = {".mkv", ".mp4", ".mov", ".avi", ".m4v", ".ts", ".webm"}
+BIN_EXT = {".bin", ".log", ".tlog", ".px4log", ".ulg"}
+
+
+def _library_files(exts: set[str]) -> list[dict]:
+    """Ficheros de la biblioteca con esas extensiones, recorriendo subcarpetas."""
+    if not LIBRARY_DIR.is_dir():
+        return []
+    out = []
+    for p in sorted(LIBRARY_DIR.rglob("*")):
+        if p.is_file() and p.suffix.lower() in exts and not p.name.startswith("."):
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            out.append({
+                "path": str(p),
+                # nombre relativo: con subcarpetas por vuelo distingue homónimos
+                "name": str(p.relative_to(LIBRARY_DIR)),
+                "size": st.st_size,
+                "mtime": int(st.st_mtime),
+            })
+    return out
+
+
+def _library_usage() -> int:
+    """Bytes ocupados por la biblioteca (suma recursiva)."""
+    if not LIBRARY_DIR.is_dir():
+        return 0
+    total = 0
+    for p in LIBRARY_DIR.rglob("*"):
+        if p.is_file():
+            try:
+                total += p.stat().st_size
+            except OSError:
+                pass
+    return total
+
+
+def _safe_library_name(nombre: str, exts: set[str]) -> str:
+    """Nombre saneado para escribir en la biblioteca.
+
+    Se queda con el basename y filtra caracteres raros, de modo que un nombre
+    como '../../etc/x' no pueda escribir fuera de LIBRARY_DIR.
+    """
+    base = os.path.basename(nombre or "")
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base).lstrip(".") or "fichero"
+    if Path(base).suffix.lower() not in exts:
+        raise HTTPException(400, f"extensión no admitida: {base}")
+    return base
+
+
 app = FastAPI(title="PinPoint", version="0.2.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -175,6 +237,79 @@ def _ground_under_drone(s: Source, sr, tv: float, terrain: str) -> tuple[float |
 @app.get("/api/health")
 def health():
     return {"status": "ok", "sources": len(SOURCES)}
+
+
+@app.get("/api/library")
+def library():
+    """Contenido de la carpeta de vuelos y estado de la cuota.
+
+    Alimenta los dos desplegables de la pantalla inicial. Vídeos y logs van por
+    separado y sin emparejar: se elige uno de cada lista.
+    """
+    usado = _library_usage()
+    return {
+        "dir": str(LIBRARY_DIR),
+        "exists": LIBRARY_DIR.is_dir(),
+        "writable": LIBRARY_DIR.is_dir() and os.access(LIBRARY_DIR, os.W_OK),
+        "videos": _library_files(VIDEO_EXT),
+        "logs": _library_files(BIN_EXT),
+        "quota": {
+            "used": usado,
+            "limit": LIBRARY_QUOTA_BYTES,
+            "free": max(0, LIBRARY_QUOTA_BYTES - usado),
+            "pct": round(100 * usado / LIBRARY_QUOTA_BYTES, 1) if LIBRARY_QUOTA_BYTES else 0.0,
+        },
+    }
+
+
+@app.post("/api/library/upload")
+async def library_upload(file: UploadFile = File(...), kind: str = Form("video")):
+    """Sube UN fichero (vídeo o log) a la carpeta de vuelos, respetando la cuota.
+
+    Se escribe a un temporal y se va comprobando el tamaño mientras entra: así
+    una subida que se pasaría de cuota se corta a mitad y no deja el disco lleno.
+    Al terminar, el fichero aparece en el desplegable correspondiente.
+    """
+    exts = BIN_EXT if kind == "log" else VIDEO_EXT
+    if not LIBRARY_DIR.is_dir():
+        raise HTTPException(400, f"la carpeta de vuelos no existe: {LIBRARY_DIR}")
+    if not os.access(LIBRARY_DIR, os.W_OK):
+        raise HTTPException(
+            403, f"la carpeta de vuelos es de solo lectura: {LIBRARY_DIR}")
+
+    nombre = _safe_library_name(file.filename or "", exts)
+    destino = LIBRARY_DIR / nombre
+    if destino.exists():
+        raise HTTPException(409, f"ya existe un fichero con ese nombre: {nombre}")
+
+    libre = LIBRARY_QUOTA_BYTES - _library_usage()
+    if libre <= 0:
+        raise HTTPException(
+            507, f"cuota agotada ({LIBRARY_QUOTA_BYTES / 1024**3:.0f} GB): borra algo antes de subir")
+
+    tmp = LIBRARY_DIR / f".subiendo_{uuid.uuid4().hex[:8]}"
+    escrito = 0
+    try:
+        with open(tmp, "wb") as f:
+            while chunk := await file.read(1024 * 1024):
+                escrito += len(chunk)
+                if escrito > libre:
+                    raise HTTPException(
+                        507,
+                        f"la subida supera la cuota: quedan {libre / 1024**3:.1f} GB "
+                        f"de {LIBRARY_QUOTA_BYTES / 1024**3:.0f} GB")
+                f.write(chunk)
+        tmp.replace(destino)
+    except Exception:
+        tmp.unlink(missing_ok=True)      # no dejar restos a medio subir
+        raise
+
+    usado = _library_usage()
+    return {
+        "name": nombre, "path": str(destino), "size": escrito, "kind": kind,
+        "quota": {"used": usado, "limit": LIBRARY_QUOTA_BYTES,
+                  "free": max(0, LIBRARY_QUOTA_BYTES - usado)},
+    }
 
 
 class RegisterBody(BaseModel):

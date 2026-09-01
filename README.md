@@ -93,11 +93,62 @@ docker compose up -d --build
 # -> http://localhost:${PINPOINT_PORT}   (8096 por defecto)
 ```
 
+### Despliegue en un servidor
+
+`deploy.sh` tiene dos modos. Por defecto **git**: el servidor hace `git pull` y
+construye, así lo desplegado es exactamente lo que hay en GitHub.
+
+```bash
+REMOTE_USER=usuario REMOTE_HOST=servidor ./deploy.sh              # git pull de main
+REMOTE_USER=usuario REMOTE_HOST=servidor MODE=rsync ./deploy.sh   # copia local sin publicar
+```
+
+En modo git el servidor necesita poder leer el repo (deploy key en GitHub si es
+privado). El `.env` **no viaja** (ni por git ni por rsync): si el servidor no
+tiene uno, el script lo siembra desde `.env.example`.
+
+---
+
+## La carpeta de vuelos y su cuota
+
+PinPoint lee los vuelos de **una carpeta del servidor** y la muestra en la
+pantalla inicial como **dos desplegables independientes**: uno con los vídeos y
+otro con los logs. Se elige uno de cada uno; no se emparejan solos, porque el
+vídeo y el log de un mismo vuelo no siempre comparten nombre.
+
+- Se recorren **subcarpetas**, así que se puede tener una por vuelo. En la lista
+  se ve el nombre relativo y el tamaño, que es lo que permite distinguirlos.
+- Extensiones reconocidas: vídeo `.mkv .mp4 .mov .avi .m4v .ts .webm`;
+  log `.bin .log .tlog .px4log .ulg`.
+- **Subir ficheros** desde el navegador los deja en esa misma carpeta, así que
+  aparecen en el desplegable al terminar. Se sube de uno en uno, con barra de
+  progreso, y el que acaba de subirse queda ya seleccionado.
+
+### Cuota
+
+| variable | por defecto | qué hace |
+|---|---|---|
+| `PINPOINT_LIBRARY` | `/mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico` | carpeta que se lista y donde aterrizan las subidas |
+| `PINPOINT_QUOTA_GB` | `25` | tope de ocupación de esa carpeta |
+
+La ocupación se muestra siempre en la pantalla inicial (verde, ámbar al pasar del
+80 %, rojo al llenarse). Al alcanzar el tope **se rechazan las subidas nuevas**;
+PinPoint **nunca borra nada** por su cuenta: son datos de campaña, y hacer hueco
+es una decisión de la persona. Si una subida fuese a pasarse de cuota, se corta
+mientras entra y no deja el fichero a medias.
+
+La carpeta debe estar **dentro de `PINPOINT_SOURCE_MOUNT`** y montada de
+lectura-escritura (así viene en `docker-compose.yml`). Si se monta en solo
+lectura, los desplegables siguen funcionando pero la subida se desactiva y la
+interfaz lo dice.
+
 ---
 
 ## Cómo se usa (flujo del paper)
 
-1. **Carga el vuelo** (`.bin` + vídeo) en la pantalla inicial.
+1. **Carga el vuelo** en la pantalla inicial: lo normal es elegirlo en los dos
+   desplegables de la **carpeta del servidor** (uno de vídeos, otro de logs).
+   Ver [La carpeta de vuelos](#la-carpeta-de-vuelos-y-su-cuota).
 2. **Sincroniza** en la pestaña *Flight*. Para el vuelo de referencia, usa
    sincronía **manual con offset ≈ 1,4 s** (la detección por despegue falla en
    este VTOL: detecta la transición, no el despegue).

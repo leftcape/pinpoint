@@ -58,8 +58,14 @@ indexar nada persistente; usa `source_key`.
 
 ## Cómo funciona (para el usuario)
 
-1. Carga un vuelo (`.bin` + vídeo) en la pantalla inicial: "Ruta en servidor"
-   (fichero ya en disco) o "Subir ficheros" (arrastra desde el navegador).
+1. Carga un vuelo en la pantalla inicial. Tres modos:
+   - **Carpeta del servidor** (lo normal): dos desplegables independientes, uno
+     de vídeos y otro de logs, con lo que hay en `PINPOINT_LIBRARY`. Desde ahí
+     se suben ficheros a esa misma carpeta, con cuota (`PINPOINT_QUOTA_GB`, 25
+     GB por defecto): al llenarse se rechazan subidas, nunca se borra nada solo.
+   - **Ruta en servidor**: escribir rutas absolutas (ficheros de fuera de la
+     biblioteca).
+   - **Subir ficheros**: el par bin+vídeo va a la carpeta de trabajo de la app.
 2. Sincroniza y fija el FOV en la pestaña **Flight**.
 3. Pestaña **GCP**: modelo del terreno, **bloquear**, y **"Tomar puntos"**:
    - **"Empezar a marcar este frame"** (pausa el vídeo, activa el overlay de clicks);
@@ -108,7 +114,8 @@ compose up -d --build`.
 del repo apunta a puerto 8095. `REMOTE_USER=luis REMOTE_HOST=192.168.1.200
 REMOTE_DIR=/home/luis/docker/pinpoint ./deploy.sh` (anuncia + smoke-test; el user
 tiene autonomía de deploy en staging). Datos en /mnt/datos1/docker-data/pinpoint.
-El vuelo de referencia en disco del servidor:
+La carpeta de vuelos del servidor (`PINPOINT_LIBRARY`, la que alimenta los
+desplegables y recibe las subidas) y donde está el vuelo de referencia:
 /mnt/data/srv/carto_private/08_TEST/vueloFotogrametrico/ (00000064.BIN +
 recording_96_visible.mkv).
 

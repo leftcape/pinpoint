@@ -113,6 +113,38 @@ export interface Candidate {
 // 'ign' = MDT 5m España; 'cop' = Copernicus DEM 90m mundial.
 export type TerrainSource = 'flat' | 'ign' | 'cop'
 
+// --- carpeta de vuelos del servidor ---
+export interface LibraryFile {
+  path: string      // ruta absoluta en el servidor (lo que se registra)
+  name: string      // relativa a la carpeta: es lo que se muestra
+  size: number
+  mtime: number
+}
+
+export interface Quota {
+  used: number
+  limit: number
+  free: number
+  pct: number
+}
+
+export interface Library {
+  dir: string
+  exists: boolean
+  writable: boolean   // si es false, la carpeta está montada de solo lectura
+  videos: LibraryFile[]
+  logs: LibraryFile[]
+  quota: Quota
+}
+
+export interface LibraryUploaded {
+  name: string
+  path: string
+  size: number
+  kind: 'video' | 'log'
+  quota: Omit<Quota, 'pct'>
+}
+
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`)
@@ -147,6 +179,36 @@ export const api = {
     return j<{ id: string; key: string; label: string; bin_path: string; video_path: string; has_campaign: boolean }[]>(
       await fetch('/api/sources'),
     )
+  },
+
+  // Carpeta de vuelos del servidor: lo que alimenta los dos desplegables de la
+  // pantalla inicial, más el estado de la cuota.
+  async library() {
+    return j<Library>(await fetch('/api/library'))
+  },
+
+  // Sube UN fichero a esa carpeta. `kind` decide en qué desplegable aparece.
+  async libraryUpload(file: File, kind: 'video' | 'log', onProgress?: (pct: number) => void) {
+    // XHR en vez de fetch: es la única forma de tener progreso de subida, y
+    // estos ficheros son de GB.
+    return new Promise<LibraryUploaded>((resolve, reject) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('kind', kind)
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/library/upload')
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((100 * e.loaded) / e.total))
+      }
+      xhr.onload = () => {
+        let body: any = {}
+        try { body = JSON.parse(xhr.responseText) } catch { /* respuesta no-JSON */ }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body)
+        else reject(new Error(body?.detail || `error ${xhr.status}`))
+      }
+      xhr.onerror = () => reject(new Error('fallo de red al subir'))
+      xhr.send(fd)
+    })
   },
 
   // candidatos de fotograma desde el log (pasadas rectas / virajes)
