@@ -144,8 +144,10 @@ recording_96_visible.mkv).
 - **Paper**: `~/repos/upm/papers-26-27/02_fmv/` (bitácora, PROCESO, compendio de
   estudios en `docs/ENFOQUE_2026-08-26.md`). Los estudios E1–E9 salen de
   `points.csv`.
-- **GitHub PRIVADO**: `leftcape/pinpoint` (cuenta `elgeografo`, SSH). `git push`.
-- **Licencias con titularidad**: autor Luis Izquierdo Mesa, explotación LeftCape
-  (PolyForm-NC código, CC BY-NC docs). El usuario asume el riesgo legal sin abogado.
-- **PENDIENTE**: dataset de ejemplo (enlace externo, Zenodo por DOI) para el paper;
-  revisión legal SOLO antes de hacer el repo público.
+- **GitHub PÚBLICO**: `leftcape/pinpoint` (cuenta `elgeografo`, SSH). `git push`.
+- **Licencias con titularidad**: autor Luis Izquierdo Mesa, explotación LeftCape.
+  **AGPL-3.0-or-later** en el código y **CC BY 4.0** en docs/datos desde el
+  2026-09-07 (antes PolyForm-NC / CC BY-NC). LeftCape es titular único, así que
+  conserva la vía de licencia comercial; por eso las contribuciones externas
+  necesitan cesión expresa de derechos (ver NOTICE).
+- **PENDIENTE**: dataset de ejemplo (enlace externo, Zenodo por DOI) para el paper.

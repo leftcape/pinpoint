@@ -323,11 +323,16 @@ En el servidor (la imagen no lleva matplotlib; `reproyectar` no lo necesita):
 
 ## Licencia y créditos
 
-- **Código** (`pinpoint_core/`, `server/`, `web/`): PolyForm Noncommercial 1.0.0
-  — libre para cualquier uso **no comercial** (investigación, educación, uso
-  personal). Ver [LICENSE](LICENSE).
-- **Documentación, figuras y datos**: CC BY-NC 4.0. Ver [LICENSE-docs](LICENSE-docs).
+- **Código** (`pinpoint_core/`, `server/`, `web/`): **GNU AGPL-3.0-or-later** —
+  software libre: puedes usarlo, estudiarlo, modificarlo y redistribuirlo para
+  cualquier fin, incluido el comercial. A cambio, las obras derivadas deben
+  distribuirse bajo la misma licencia y, si ofreces el software a través de una
+  red, has de poner su código fuente a disposición de los usuarios. Ver
+  [LICENSE](LICENSE).
+- **Documentación, figuras y datos**: CC BY 4.0. Ver [LICENSE-docs](LICENSE-docs).
 - Desarrollado con la ayuda de **LeftCape**, que puso los medios; los derechos de
-  explotación pertenecen a LeftCape. Ver [NOTICE](NOTICE).
+  explotación pertenecen a LeftCape. Al ser titular único, LeftCape puede además
+  licenciar PinPoint en otros términos a quien necesite integrarlo en un producto
+  propietario. Ver [NOTICE](NOTICE).
 
 Para citar el software, ver [CITATION.cff](CITATION.cff).

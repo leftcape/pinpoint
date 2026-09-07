@@ -7,23 +7,39 @@ pertenecen a LeftCape.
 
 LICENCIAS
 ---------
-- Código fuente (pinpoint_core/, server/, web/): PolyForm Noncommercial License
-  1.0.0 — uso permitido para cualquier fin NO comercial (investigación,
-  educación, uso personal, organizaciones sin ánimo de lucro). Ver LICENSE.
+- Código fuente (pinpoint_core/, server/, web/): GNU Affero General Public
+  License v3.0 (AGPL-3.0-or-later). Ver LICENSE.
 - Documentación, figuras y datos de ejemplo (docs/, data/): Creative Commons
-  Attribution-NonCommercial 4.0 (CC BY-NC 4.0). Ver LICENSE-docs.
+  Attribution 4.0 (CC BY 4.0). Ver LICENSE-docs.
 
-El uso COMERCIAL requiere autorización expresa de LeftCape.
+El uso, el estudio, la modificación y la redistribución son libres para
+cualquier fin, incluido el comercial. La AGPL exige, a cambio, que las obras
+derivadas se distribuyan bajo la misma licencia y que, cuando el software se
+ofrezca a través de una red (por ejemplo como aplicación web), se ponga el
+código fuente completo de la versión ofrecida a disposición de sus usuarios.
 
-PENDIENTE DE REVISIÓN LEGAL
----------------------------
-La elección de licencias no comerciales tiene matices ("no comercial" es un
-término con fronteras difusas: universidades privadas, ONGs con financiación,
-etc.). Antes de la publicación definitiva del repositorio y del paper, LeftCape
-debe revisar con asesoría legal que estas licencias reflejan exactamente lo que
-se quiere permitir y restringir.
+LICENCIA COMERCIAL
+------------------
+LeftCape es titular único de los derechos de explotación y, en consecuencia,
+puede conceder licencias en otros términos. Quien desee integrar PinPoint en un
+producto propietario sin quedar sujeto a las obligaciones de la AGPL puede
+solicitar una licencia comercial a LeftCape.
+
+RELICENCIADO
+------------
+Hasta 2026-09-07 este software se distribuyó bajo PolyForm Noncommercial 1.0.0
+(código) y CC BY-NC 4.0 (documentación y datos). Desde esa fecha pasa a
+AGPL-3.0 y CC BY 4.0 respectivamente. El cambio lo acuerda LeftCape como titular
+único de los derechos de explotación. Las copias obtenidas bajo los términos
+anteriores conservan la licencia con la que se recibieron.
 
 ORIGEN DEL CÓDIGO
 -----------------
 El núcleo de proyección procede del proyecto interno `geosync`, copiado y
 congelado el 2026-07-16. Ver FROZEN.md.
+
+CONTRIBUCIONES
+--------------
+Para que LeftCape pueda seguir concediendo licencias comerciales, las
+contribuciones externas requieren la cesión o la licencia expresa de los
+derechos necesarios al titular. Si tienes previsto contribuir, contacta antes.

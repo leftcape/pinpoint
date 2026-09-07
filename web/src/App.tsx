@@ -129,6 +129,17 @@ export function App() {
           <span title={t('app.campaignState')}>
             {locked ? '🔒' : '🔓'} {saveLabel}
           </span>
+          {/* AGPL-3.0 art. 13: el software se ofrece por red, asi que la
+              interfaz ofrece acceso al codigo fuente de esta version. */}
+          <a
+            href="https://github.com/leftcape/pinpoint"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t('app.sourceTitle')}
+            className="text-gray-300 hover:text-white underline"
+          >
+            {t('app.source')}
+          </a>
         </div>
       </header>
 

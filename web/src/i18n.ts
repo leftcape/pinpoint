@@ -22,6 +22,9 @@ const es = {
   'app.saving': 'guardando…',
   'app.noServer': '⚠ sin servidor',
   'app.campaignState': 'estado de la campaña de puntos de control',
+  // AGPL-3.0 art. 13: al ofrecerse por red, la interfaz debe dar acceso al fuente.
+  'app.source': 'Código fuente',
+  'app.sourceTitle': 'PinPoint es software libre (AGPL-3.0). Ver el código fuente.',
   'tab.flight': 'Vuelo',
   'tab.location': 'Localización',
   'tab.gcp': 'Puntos de control',
@@ -346,6 +349,8 @@ const en: Record<Key, string> = {
   'app.saving': 'saving…',
   'app.noServer': '⚠ no server',
   'app.campaignState': 'control-point campaign status',
+  'app.source': 'Source code',
+  'app.sourceTitle': 'PinPoint is free software (AGPL-3.0). View the source code.',
   'tab.flight': 'Flight',
   'tab.location': 'Location',
   'tab.gcp': 'Control points',

@@ -8,7 +8,7 @@ demasiado para versionarlos en el repositorio, así que se distribuyen aparte.
 
 > **PENDIENTE.** Aquí irá el enlace externo de descarga del dataset de ejemplo
 > (por decidir: Zenodo, un enlace institucional, u otro repositorio de datos).
-> Recomendación: Zenodo, porque da un DOI citable y encaja con CC BY-NC.
+> Recomendación: Zenodo, porque da un DOI citable y encaja con CC BY 4.0.
 
 Una vez descargado, coloca los ficheros donde prefieras y regístralos en la app
 por su ruta (modo "Ruta en servidor") o súbelos desde el navegador.
@@ -23,4 +23,4 @@ por su ruta (modo "Ruta en servidor") o súbelos desde el navegador.
 
 ## Licencia de los datos
 
-Los datos de ejemplo se publican bajo CC BY-NC 4.0 (ver `LICENSE-docs`).
+Los datos de ejemplo se publican bajo CC BY 4.0 (ver `LICENSE-docs`).
