@@ -101,6 +101,7 @@ interface State {
   locSelected: string | null // punto localizado resaltado (id)
   locBusy: boolean // proyectando en el backend
   locHint: string | null // aviso del modo localizar (p.ej. "marca sobre la foto")
+  locError: string | null // fallo de la ÚLTIMA localización (no el error global del store)
   markSwapBefore: boolean // cómo estaba la vista antes de entrar en Localizar
   mapHandle: import('maplibre-gl').Map | null // el mapa real, para capturas del muestreador
   footprint: Footprint | null
@@ -308,6 +309,7 @@ export const useStore = create<State>((set, get) => {
     locSelected: null,
     locBusy: false,
     locHint: null,
+    locError: null,
     markSwapBefore: false,
     mapHandle: null,
     footprint: null,
@@ -510,7 +512,7 @@ export const useStore = create<State>((set, get) => {
     // al salir se restaura la vista que había.
     setMarkMode(on) {
       if (on) {
-        set({ markMode: true, markSwapBefore: get().swapView, swapView: true, locHint: null, error: null })
+        set({ markMode: true, markSwapBefore: get().swapView, swapView: true, locHint: null, locError: null })
       } else {
         set({ markMode: false, locSelected: null, locHint: null, swapView: get().markSwapBefore })
       }
@@ -534,7 +536,7 @@ export const useStore = create<State>((set, get) => {
           api.footprint(s.sourceId, tv, s.syncMethod, s.manualOffset, s.nadirThr, s.tuning, s.terrain),
         ])
         if (!r.valid || r.theta_deg == null || r.band == null) {
-          set({ error: t('loc.errProject') })
+          set({ locError: t('loc.errProject') })
           return
         }
         const c = s.gcpCampaign
@@ -569,9 +571,9 @@ export const useStore = create<State>((set, get) => {
           terrain_source: r.terrain_source ?? s.terrain,
         }
         persistLocated({ ...c, source_id: s.sourceId, located: [...c.located, p] })
-        set({ locSelected: p.id })
+        set({ locSelected: p.id, locError: null })
       } catch (e) {
-        set({ error: String(e) })
+        set({ locError: String(e) })
       } finally {
         set({ locBusy: false })
       }
