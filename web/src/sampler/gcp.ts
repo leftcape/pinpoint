@@ -18,6 +18,7 @@
 // horas de trabajo) y en el servidor, junto al vuelo, por su clave estable.
 
 import type { SyncMethod, TerrainSource } from '../api'
+import type { LocatedPoint } from './located'
 
 export interface LngLat {
   lng: number
@@ -162,6 +163,9 @@ export interface GcpCampaign {
   source_label: string | null // nombre legible (fichero del vídeo)
   config: CampaignConfig
   frames: GcpFrame[]
+  // puntos LOCALIZADOS (modo operativo): coordenada + banda + margen, SIN
+  // fotograma (se regenera del vídeo). Aparte de los GCP: no llevan verdad-terreno.
+  located: LocatedPoint[]
 }
 
 // ---------- defaults / migración ----------
@@ -199,6 +203,7 @@ export function newCampaign(
     source_label: sourceLabel,
     config,
     frames: [],
+    located: [],
   }
 }
 
@@ -219,7 +224,8 @@ export function altFov(cfg: CampaignConfig): { kind: FovKind; fov_h: number } | 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function migrateCampaign(raw: any): GcpCampaign | null {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.frames)) return null
-  if (raw.version === 2 && raw.config) return raw as GcpCampaign
+  // `located` llegó en 0.4: las campañas anteriores no lo traen
+  if (raw.version === 2 && raw.config) return { ...raw, located: Array.isArray(raw.located) ? raw.located : [] } as GcpCampaign
   // v1: la configuración se reconstruye de lo que llevaba cada frame
   const f0 = raw.frames[0]?.telemetry
   const cfg = defaultConfig(f0?.aspect ?? 16 / 9, (f0?.sync_method as SyncMethod) ?? 'takeoff')
@@ -258,6 +264,7 @@ export function migrateCampaign(raw: any): GcpCampaign | null {
     source_label: raw.source_label ?? null,
     config: cfg,
     frames,
+    located: Array.isArray(raw.located) ? raw.located : [],
   }
 }
 

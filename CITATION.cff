@@ -6,8 +6,8 @@ authors:
   - family-names: Izquierdo Mesa
     given-names: Luis
     affiliation: LeftCape
-version: 0.2.0
-date-released: "2026-07-16"
+version: 0.4.0
+date-released: "2026-09-22"
 license: AGPL-3.0-or-later
 repository-code: "https://github.com/leftcape/pinpoint"
 abstract: >-
@@ -16,7 +16,9 @@ abstract: >-
   de procesamiento fotogramétrico previo. Está pensado para respuesta rápida en
   situaciones de desastre. Este repositorio acompaña un artículo que valida el
   método y acota su error en función de la distancia al centro de imagen y las
-  condiciones de vuelo.
+  condiciones de vuelo. Desde la versión 0.4 cada coordenada se entrega con su
+  ángulo de visión, su banda de fiabilidad y el margen esperable medido en esa
+  validación.
 keywords:
   - georreferenciación
   - vídeo aéreo

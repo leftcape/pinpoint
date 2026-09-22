@@ -34,6 +34,7 @@ import {
   type LngLat,
 } from './sampler/gcp'
 import { t } from './i18n'
+import { newId, nextLabel, type LocatedPoint } from './sampler/located'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'local-only' | 'error' | 'readonly' | 'badpass'
 
@@ -96,9 +97,9 @@ interface State {
   measureMode: boolean // herramienta de medir distancias en el mapa
   measureDecompose: boolean // descomponer el último tramo en catetos X (E-O) e Y (N-S)
   measurePoints: [number, number][] // vértices [lng,lat] de la línea de medida
-  markMode: boolean // modo 'marcar punto': click en el vídeo -> punto en el mapa
-  markedPoint: { lat: number; lng: number } | null // último punto marcado
-  markedPixel: { px: number; py: number; imgW: number; imgH: number } | null
+  markMode: boolean // modo 'localizar': click en el vídeo -> punto localizado (coordenada + banda)
+  locSelected: string | null // punto localizado resaltado (id)
+  locBusy: boolean // proyectando en el backend
   mapHandle: import('maplibre-gl').Map | null // el mapa real, para capturas del muestreador
   footprint: Footprint | null
 
@@ -152,7 +153,10 @@ interface State {
   clearMeasure: () => void
   setMarkMode: (on: boolean) => void
   markPoint: (px: number, py: number, imgW: number, imgH: number) => Promise<void>
-  clearMarkedPoint: () => void
+  locSelect: (id: string | null) => void
+  locRename: (id: string, label: string) => void
+  locDelete: (id: string) => void
+  locClear: () => void
   registerMap: (m: import('maplibre-gl').Map | null) => void
   refreshFootprint: () => Promise<void>
   // --- configuración de campaña / FOV ---
@@ -214,6 +218,19 @@ export const useStore = create<State>((set, get) => {
     set({ gcpCampaign: stamped, gcpStorageFull: !saveCampaign(stamped) })
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => void get().gcpSaveNow(), 800)
+  }
+
+  // Los puntos LOCALIZADOS (modo operativo) se guardan aunque no se pueda
+  // escribir en el servidor: quien mira la instancia pública sin contraseña
+  // también tiene que poder localizar. Sin permiso quedan en este navegador
+  // (localStorage) y en la exportación; con permiso van al servidor como todo.
+  const persistLocated = (next: GcpCampaign) => {
+    if (canWrite()) {
+      persist(next)
+      return
+    }
+    const stamped = { ...next, updated_at: new Date().toISOString() }
+    set({ gcpCampaign: stamped, gcpStorageFull: !saveCampaign(stamped) })
   }
 
   // Vuelca los parámetros de la configuración al estado efectivo de la app.
@@ -285,8 +302,8 @@ export const useStore = create<State>((set, get) => {
     measureDecompose: false,
     measurePoints: [],
     markMode: false,
-    markedPoint: null,
-    markedPixel: null,
+    locSelected: null,
+    locBusy: false,
     mapHandle: null,
     footprint: null,
     gcpMode: false,
@@ -485,25 +502,90 @@ export const useStore = create<State>((set, get) => {
 
     setMarkMode(on) {
       set({ markMode: on })
-      if (!on) set({ markedPoint: null })
+      if (!on) set({ locSelected: null })
     },
 
+    // Un click en la foto -> punto LOCALIZADO: coordenada + fiabilidad (theta,
+    // banda, margen), anclado al instante en que se clicó y con la
+    // configuración efectiva registrada, para que la coordenada se pueda rehacer.
     async markPoint(px, py, imgW, imgH) {
-      const { sourceId, currentTv, syncMethod, manualOffset, tuning, terrain } = get()
-      if (!sourceId) return
+      const s = get()
+      if (!s.sourceId || !s.video || s.locBusy) return
+      const tv = s.currentTv
+      set({ locBusy: true })
       try {
-        const r = await api.projectPoint(
-          sourceId, currentTv, px, py, imgW, imgH, syncMethod, manualOffset, tuning, false, terrain,
-        )
-        set({ markedPixel: { px, py, imgW, imgH } })
-        if (r.valid) set({ markedPoint: { lat: r.lat, lng: r.lng } })
+        const [r, fp] = await Promise.all([
+          api.projectPoint(s.sourceId, tv, px, py, imgW, imgH, s.syncMethod, s.manualOffset, s.tuning, false, s.terrain),
+          api.footprint(s.sourceId, tv, s.syncMethod, s.manualOffset, s.nadirThr, s.tuning, s.terrain),
+        ])
+        if (!r.valid || r.theta_deg == null || r.band == null) {
+          set({ error: t('loc.errProject') })
+          return
+        }
+        const c = s.gcpCampaign
+        const p: LocatedPoint = {
+          id: newId(),
+          label: nextLabel(c.located),
+          created_at: new Date().toISOString(),
+          tv,
+          frame_index: frameIndex(tv, s.video.fps),
+          px,
+          py,
+          imgW,
+          imgH,
+          lat: r.lat,
+          lng: r.lng,
+          clipped: r.clipped,
+          drone: r.drone ?? { lat: fp.drone[0], lng: fp.drone[1] },
+          agl_m: r.agl_m ?? fp.agl,
+          theta_deg: r.theta_deg,
+          d_nadir_m: r.d_nadir_m ?? 0,
+          band: r.band,
+          margin_p90_m: r.margin_p90_m ?? 0,
+          model_err_m: r.model_err_m ?? null,
+          nadir_ok: fp.nadir_ok,
+          reason: fp.reason,
+          sync_method: s.syncMethod,
+          sync_offset: s.manualOffset,
+          fov_kind: c.config.fov.active,
+          fov_h: s.tuning.fov_h,
+          d_pitch: s.tuning.d_pitch,
+          d_roll: s.tuning.d_roll,
+          terrain_source: r.terrain_source ?? s.terrain,
+        }
+        persistLocated({ ...c, source_id: s.sourceId, located: [...c.located, p] })
+        set({ locSelected: p.id })
       } catch (e) {
         set({ error: String(e) })
+      } finally {
+        set({ locBusy: false })
       }
     },
 
-    clearMarkedPoint() {
-      set({ markedPoint: null, markedPixel: null })
+    locSelect(id) {
+      set({ locSelected: id })
+      if (!id) return
+      const p = get().gcpCampaign.located.find((x) => x.id === id)
+      if (!p) return
+      // llevar el vídeo al fotograma del punto y el mapa encima de él
+      if (Math.abs(get().currentTv - p.tv) > 0.02) get().videoSeekTo(p.tv)
+      get().mapHandle?.easeTo({ center: [p.lng, p.lat], duration: 300 })
+    },
+
+    locRename(id, label) {
+      const c = get().gcpCampaign
+      persistLocated({ ...c, located: c.located.map((p) => (p.id === id ? { ...p, label } : p)) })
+    },
+
+    locDelete(id) {
+      const c = get().gcpCampaign
+      persistLocated({ ...c, located: c.located.filter((p) => p.id !== id) })
+      if (get().locSelected === id) set({ locSelected: null })
+    },
+
+    locClear() {
+      persistLocated({ ...get().gcpCampaign, located: [] })
+      set({ locSelected: null })
     },
 
     registerMap(m) {
@@ -898,7 +980,8 @@ export const useStore = create<State>((set, get) => {
           : ''
       let next: GcpCampaign
       if (mode === 'replace' || cur.frames.length === 0) {
-        next = { ...inc, source_id: cur.source_id, source_key: cur.source_key ?? inc.source_key, source_label: cur.source_label ?? inc.source_label }
+        // los puntos localizados no se pierden al importar una campaña de GCP sin ellos
+        next = { ...inc, located: inc.located.length ? inc.located : cur.located, source_id: cur.source_id, source_key: cur.source_key ?? inc.source_key, source_label: cur.source_label ?? inc.source_label }
         applyConfig(next.config)
       } else {
         // fusionar por fotograma: los frames nuevos se añaden; los que ya existen

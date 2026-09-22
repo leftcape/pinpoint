@@ -11,6 +11,7 @@ Módulos:
   sync       sincronización vídeo-tiempo ↔ tiempo-de-vuelo (takeoff / creation_time / manual).
   footprint  proyección: footprint del frame + project_pixel (con actitud y ortogonal).
   video      sondeo del vídeo (ffprobe) y extracción de un fotograma suelto (ffmpeg).
+  reliability ángulo de visión theta y bandas de fiabilidad A/B/C con su margen (criterio por punto del artículo).
 
 ORIGEN Y CONGELACIÓN
 --------------------
@@ -24,4 +25,4 @@ Se dejó FUERA a propósito lo que era específico de la reconstrucción con Web
 proyecta puntos al instante, no genera datasets de frames para fotogrametría.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"

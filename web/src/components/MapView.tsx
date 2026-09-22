@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { api } from '../api'
 import { warpFrameToQuad } from '../warp'
 import { frameIndex, type GcpPoint } from '../sampler/gcp'
+import { BAND_COLOR, circlePolygon } from '../sampler/located'
 import { useT } from '../i18n'
 
 // Dos capas base conmutables:
@@ -59,8 +60,13 @@ export function MapView() {
   const registerMap = useStore((s) => s.registerMap)
   const decompMarkersRef = useRef<maplibregl.Marker[]>([])
   const addMeasurePoint = useStore((s) => s.addMeasurePoint)
-  const markedPoint = useStore((s) => s.markedPoint)
-  const markMarkerRef = useRef<maplibregl.Marker | null>(null)
+  const located = useStore((s) => s.gcpCampaign.located)
+  const locSelected = useStore((s) => s.locSelected)
+  const locSelect = useStore((s) => s.locSelect)
+  const locMarkersRef = useRef<maplibregl.Marker[]>([])
+  // el estilo puede no estar cargado cuando llegan los primeros puntos: se
+  // reintenta al cargarse
+  const [styleTick, setStyleTick] = useState(0)
   const [base, setBase] = useState<'pnoa' | 'osm'>('pnoa')
   const sourceId = useStore((s) => s.sourceId)
   const terrain = useStore((s) => s.terrain)
@@ -306,29 +312,69 @@ export function MapView() {
     }
   }, [position, followDrone])
 
-  // marcador del punto marcado en la foto (con sus coordenadas)
+  // --- puntos LOCALIZADOS (modo operativo): etiqueta + círculo del margen ---
+  // El círculo es la incertidumbre que se entrega con la coordenada (P90 de su
+  // banda), en el color de la banda. Se pintan siempre salvo en modo GCP,
+  // donde estorbarían a la figura del paper.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (!markedPoint) {
-      markMarkerRef.current?.remove()
-      markMarkerRef.current = null
+    if (!map.isStyleLoaded()) {
+      map.once('load', () => setStyleTick((k) => k + 1))
       return
     }
-    const popup = new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(
-      `<div style="font:12px monospace">${markedPoint.lat.toFixed(6)}, ${markedPoint.lng.toFixed(6)}</div>`,
-    )
-    if (!markMarkerRef.current) {
-      markMarkerRef.current = new maplibregl.Marker({ color: '#2563eb' })
-        .setLngLat([markedPoint.lng, markedPoint.lat])
-        .setPopup(popup)
-        .addTo(map)
-      markMarkerRef.current.togglePopup()
-    } else {
-      markMarkerRef.current.setLngLat([markedPoint.lng, markedPoint.lat]).setPopup(popup)
-      if (!markMarkerRef.current.getPopup()?.isOpen()) markMarkerRef.current.togglePopup()
+    const SRC = 'loc-margin'
+    const clean = () => {
+      if (map.getLayer(`${SRC}-fill`)) map.removeLayer(`${SRC}-fill`)
+      if (map.getLayer(`${SRC}-line`)) map.removeLayer(`${SRC}-line`)
+      if (map.getSource(SRC)) map.removeSource(SRC)
+      locMarkersRef.current.forEach((m) => m.remove())
+      locMarkersRef.current = []
     }
-  }, [markedPoint])
+    clean()
+    if (gcpMode || located.length === 0) return
+
+    const feats: GeoJSON.Feature[] = located.map((p) => ({
+      type: 'Feature',
+      properties: { color: BAND_COLOR[p.band], sel: p.id === locSelected ? 1 : 0 },
+      geometry: { type: 'Polygon', coordinates: [circlePolygon(p.lng, p.lat, p.margin_p90_m)] },
+    }))
+    map.addSource(SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: feats } })
+    map.addLayer({
+      id: `${SRC}-fill`,
+      type: 'fill',
+      source: SRC,
+      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.25, 0.12] },
+    })
+    map.addLayer({
+      id: `${SRC}-line`,
+      type: 'line',
+      source: SRC,
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['case', ['==', ['get', 'sel'], 1], 2.5, 1.2],
+        'line-dasharray': [2, 1],
+      },
+    })
+
+    for (const p of located) {
+      const on = p.id === locSelected
+      const el = document.createElement('div')
+      el.textContent = p.label
+      el.title = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)} · θ ${p.theta_deg.toFixed(0)}° · ${p.band} ±${p.margin_p90_m} m`
+      el.style.cssText =
+        `padding:1px 6px;border-radius:9px;background:${BAND_COLOR[p.band]};color:#fff;` +
+        `border:2px solid ${on ? '#facc15' : '#fff'};font:700 ${on ? 12 : 10}px/14px system-ui,sans-serif;` +
+        'white-space:nowrap;box-shadow:0 0 3px rgba(0,0,0,.8);cursor:pointer'
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        locSelect(p.id)
+      })
+      locMarkersRef.current.push(
+        new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map),
+      )
+    }
+  }, [located, locSelected, gcpMode, locSelect, styleTick])
 
   // capa MDT visible: el mismo ráster que gobierna el AGL, coloreado (hillshade
   // + rampa de altura). Se pinta como image source sobre sus bounds.

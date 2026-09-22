@@ -28,9 +28,14 @@ en función de la distancia al centro de la imagen y las condiciones de vuelo.
 3. En cualquier instante, **proyecta** un píxel de la imagen al terreno usando la
    posición GPS, la altura, y la actitud (cabeceo/alabeo/rumbo del dron + cabeceo
    del gimbal) que lee del log.
-4. Con la herramienta de **puntos de control** mides el error real del método
+4. En la pestaña **Localizar** señalas en la foto lo que ves y obtienes la
+   coordenada al instante **con su fiabilidad**: ángulo de visión θ, banda
+   A/B/C y margen esperable (percentil 90 medido en la campaña del artículo).
+   Los puntos se acumulan, se guardan con el vuelo y se exportan (CSV,
+   GeoJSON, ZIP con los fotogramas señalados).
+5. Con la herramienta de **puntos de control** mides el error real del método
    contra verdad-terreno marcada a mano, y exportas una campaña (CSV + figuras)
-   para el análisis del paper.
+   para el análisis del paper. Es de donde salen las bandas del punto 4.
 
 Dos formas de proyectar el mismo píxel, para poder comparar:
 
@@ -228,6 +233,28 @@ roll, etc.
 
 ---
 
+## Cómo se usa (en campo): Localizar
+
+La vertiente operativa. Con el vuelo sincronizado y el FOV fijado (mejor con la
+campaña **bloqueada**, para que nada cambie bajo los pies):
+
+1. Pestaña **Localizar** → **Localizar puntos**. La cabecera dice con qué
+   sincronía, FOV y terreno se va a calcular.
+2. Para el vídeo en el fotograma que interese y haz click sobre lo que quieras
+   localizar. La coordenada aparece al instante con su **banda** (A fiable
+   0–15°, B degradada 15–45°, C orientativa 45–90°, por ángulo de visión) y su
+   **margen esperable** (P90). En el mapa, el punto con el círculo del margen.
+3. Los puntos se acumulan en una lista (etiqueta editable; clicar uno lleva el
+   vídeo y el mapa a él) y se guardan con el vuelo.
+4. **Exportar**: CSV, GeoJSON, o ZIP con además cada fotograma con sus puntos
+   señalados y la ficha al pie, para entregarlo a un equipo.
+
+Los márgenes son los medidos en la campaña del vuelo 1 del artículo (100 puntos,
+~119 m AGL) y **no se escalan con la altura**: θ y AGL se muestran al lado para
+que quien recibe la coordenada juzgue.
+
+---
+
 ## El FOV: dos valores, los dos guardados
 
 La proyección necesita el campo de visión horizontal de la cámara, que no se
@@ -303,6 +330,14 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
   Puntos de control: rectas para E1, virajes para E3); `scripts/analisis_campana.py`
   (figuras E1–E4 desde `campaign.json` y **reproyección** con otro terreno / FOV /
   desfase de sincronía sin volver a marcar).
+- **v0.4.0 (actual)** — **modo Localizar**, la vertiente operativa: cada punto
+  señalado se entrega con su ángulo de visión θ = arctan(d/AGL), su banda de
+  fiabilidad A/B/C y su margen esperable (P90 medido en la campaña del vuelo 1;
+  `pinpoint_core/reliability.py`, verificado contra los 100 GCP: reproduce la
+  tabla del artículo); círculo del margen en el mapa; puntos guardados en
+  `campaign.json` (clave `located`, sin fotograma); exportación CSV / GeoJSON /
+  ZIP con los fotogramas señalados y su ficha. Funciona también en modo lectura
+  (los puntos quedan en el navegador y en la exportación).
 - **Siguiente** — ray-cast del píxel contra el terreno inclinado; dataset de
   ejemplo citable (DOI).
 

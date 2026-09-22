@@ -40,7 +40,7 @@ function mapIdle(map: maplibregl.Map, timeoutMs = 2000): Promise<void> {
 
 // Espera a que el vídeo esté parado en `tv` y con el fotograma ya presentado:
 // sin esto la captura puede coger el frame anterior.
-function seekVideo(v: HTMLVideoElement, tv: number): Promise<void> {
+export function seekVideo(v: HTMLVideoElement, tv: number): Promise<void> {
   return new Promise((resolve) => {
     if (Math.abs(v.currentTime - tv) < 0.005 && v.readyState >= 2) return resolve()
     let done = false

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from .binlog import BinLog
 from .sync import SyncResult
+from . import reliability as _reliability
 
 # Distancia máxima al suelo para rayos casi horizontales (cámara al horizonte).
 # Las esquinas que se irían al infinito se recortan aquí.
@@ -320,4 +321,12 @@ def project_pixel(
     u = (px / img_w - 0.5) * 2.0 * hw
     v = (0.5 - py / img_h) * 2.0 * hh
     (glat, glng), clip = cast(u, v)
-    return {"lat": glat, "lng": glng, "clipped": clip, "valid": True}
+
+    # Fiabilidad del punto: ángulo de visión y banda (criterio por punto del
+    # artículo, ver reliability.py). d_nadir = distancia en el suelo entre el
+    # punto y la vertical del dron, con la misma proyección plana que el resto.
+    d_nadir = math.hypot((glat - lat) * m_per_deg_lat, (glng - lng) * m_per_deg_lng)
+    r = {"lat": glat, "lng": glng, "clipped": clip, "valid": True,
+         "drone": {"lat": lat, "lng": lng}}
+    r.update(_reliability.qualify(d_nadir, agl))
+    return r

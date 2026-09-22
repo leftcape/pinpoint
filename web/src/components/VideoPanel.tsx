@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useStore } from '../store'
 import { frameIndex } from '../sampler/gcp'
+import { BAND_COLOR } from '../sampler/located'
 import { useT } from '../i18n'
 
 // Video preview + scrubber. Moving the video updates currentTv in the store, so
@@ -18,6 +19,9 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
   const setVideoPlaying = useStore((s) => s.setVideoPlaying)
   const markMode = useStore((s) => s.markMode)
   const markPoint = useStore((s) => s.markPoint)
+  const located = useStore((s) => s.gcpCampaign.located)
+  const locSelected = useStore((s) => s.locSelected)
+  const locSelect = useStore((s) => s.locSelect)
   const gcpMode = useStore((s) => s.gcpMode)
   const gcpMarking = useStore((s) => s.gcpMarking)
   const gcpClickPhoto = useStore((s) => s.gcpClickPhoto)
@@ -264,6 +268,45 @@ export function VideoPanel({ large: _large = false }: { large?: boolean }) {
                 />
               )
             })()}
+        </div>
+      )}
+
+      {/* puntos LOCALIZADOS de este fotograma, sobre la foto (modo localizar).
+          Clicar uno lo selecciona; el resto de la superficie sigue marcando. */}
+      {markMode && !gcpMode && video && (
+        <div className="absolute inset-0 pointer-events-none">
+          {located
+            .filter((p) => p.frame_index === frameIndex(currentTv, video.fps))
+            .map((p) => {
+              const s = toScreen(p.px, p.py)
+              if (!s) return null
+              const on = p.id === locSelected
+              return (
+                <div
+                  key={p.id}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    locSelect(p.id)
+                  }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full font-bold flex items-center justify-center pointer-events-auto cursor-pointer"
+                  style={{
+                    left: s.x,
+                    top: s.y,
+                    minWidth: on ? 22 : 16,
+                    height: on ? 22 : 16,
+                    padding: '0 4px',
+                    fontSize: on ? 11 : 9,
+                    background: BAND_COLOR[p.band],
+                    color: '#fff',
+                    border: `2px solid ${on ? '#facc15' : '#fff'}`,
+                    boxShadow: '0 0 3px rgba(0,0,0,.8)',
+                  }}
+                  title={`${p.lat.toFixed(6)}, ${p.lng.toFixed(6)} · ${p.band} ±${p.margin_p90_m} m`}
+                >
+                  {p.label}
+                </div>
+              )
+            })}
         </div>
       )}
     </div>

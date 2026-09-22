@@ -56,6 +56,24 @@ export interface Footprint {
   terrain_source?: string // fuente de terreno EFECTIVA usada para el AGL
 }
 
+// Resultado de proyectar un píxel al suelo. Los campos de FIABILIDAD (theta,
+// banda, margen) los añade pinpoint_core.reliability: criterio por punto del
+// artículo. Opcionales por si el servidor es anterior a 0.4.
+export interface ProjectPointResult {
+  lat: number
+  lng: number
+  clipped: boolean
+  valid: boolean
+  terrain_source?: string
+  drone?: { lat: number; lng: number }
+  theta_deg?: number
+  d_nadir_m?: number
+  agl_m?: number
+  band?: 'A' | 'B' | 'C'
+  margin_p90_m?: number
+  model_err_m?: number
+}
+
 export interface NadirThresholds {
   max_pitch_dev: number // desviación máx del pitch vs -90° (grados)
   max_roll_dev: number // |roll| máximo (grados)
@@ -431,8 +449,6 @@ export const api = {
     if (tuning) setTuningParams(p, tuning)
     if (ortho) p.set('ortho', 'true')
     p.set('terrain', terrain)
-    return j<{ lat: number; lng: number; clipped: boolean; valid: boolean; terrain_source?: string }>(
-      await fetch(`/api/sources/${sid}/project_point?${p}`),
-    )
+    return j<ProjectPointResult>(await fetch(`/api/sources/${sid}/project_point?${p}`))
   },
 }

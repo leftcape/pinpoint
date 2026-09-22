@@ -82,6 +82,13 @@ indexar nada persistente; usa `source_key`.
      biblioteca).
    - **Subir ficheros**: el par bin+vídeo va a la carpeta de trabajo de la app.
 2. Sincroniza y fija el FOV en la pestaña **Flight**.
+2b. Pestaña **Localizar** (v0.4, la vertiente OPERATIVA): "Localizar puntos",
+   click en la foto → coordenada al instante con θ, banda A/B/C y margen P90
+   (`pinpoint_core/reliability.py`; tabla del artículo, vuelo 1). Lista de
+   puntos en `campaign.json` → `located` (sin fotograma), círculo del margen en
+   el mapa, exportación CSV/GeoJSON/ZIP con fotogramas anotados. Funciona en
+   modo lectura (queda en localStorage). Los márgenes NO se escalan con la
+   altura: decisión 2026-09-22, lo publicado es lo trazable.
 3. Pestaña **GCP**: modelo del terreno, **bloquear**, y **"Tomar puntos"**:
    - **"Empezar a marcar este frame"** (pausa el vídeo, activa el overlay de clicks);
      marca un rasgo en la FOTO → el mismo rasgo en el MAPA (verdad-terreno).
@@ -98,7 +105,7 @@ indexar nada persistente; usa `source_key`.
 
 Por capas (el núcleo es Python puro, sin navegador):
 ```
-pinpoint_core/   binlog, sync, footprint, video, terrain, terrain_cop  (Python puro)
+pinpoint_core/   binlog, sync, footprint, reliability, video, terrain, terrain_cop  (Python puro)
 server/app.py    FastAPI fino que expone el núcleo por HTTP (SIN jobs de WebODM)
 web/             front React/Vite/Tailwind/MapLibre/Zustand. TODO texto visible pasa por
                  src/i18n.ts (ES/EN, idioma del navegador por defecto, selector en la
@@ -151,3 +158,8 @@ recording_96_visible.mkv).
   conserva la vía de licencia comercial; por eso las contribuciones externas
   necesitan cesión expresa de derechos (ver NOTICE).
 - **PENDIENTE**: dataset de ejemplo (enlace externo, Zenodo por DOI) para el paper.
+- **2026-09-22, v0.4.0**: modo Localizar (ver 2b). Verificado que `reliability`
+  reproduce la tabla de bandas del artículo sobre los 100 GCP del vuelo 1
+  (15/52/33 con la verdad-terreno; 16/54/30 con el punto proyectado, que es lo
+  que se tiene en campo). El paper pasa a decir "se implementa" donde decía
+  "se propone" (§4 criterio por punto, §6).
