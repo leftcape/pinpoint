@@ -6,7 +6,7 @@ import { api } from '../api'
 import { warpFrameToQuad } from '../warp'
 import { frameIndex, type GcpPoint } from '../sampler/gcp'
 import { BAND_COLOR, circlePolygon } from '../sampler/located'
-import { useT } from '../i18n'
+import { useT, t as tt } from '../i18n'
 
 // Dos capas base conmutables:
 //  - PNOA (IGN): ortofoto oficial de España, 25cm, sin token -> para ver el terreno
@@ -107,6 +107,11 @@ export function MapView() {
   gcpRef.current = { mode: gcpMode, marking: gcpMarking, pending: gcpPendingPixel, click: gcpClickMap, first: gcpClickMapFirst }
   const fovRef = useRef({ mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap })
   fovRef.current = { mode: fovPairMode, pending: fovPairPending, click: fovPairClickMap }
+  // modo Localizar: se marca sobre la FOTO; un click en el mapa merece un aviso
+  const markMode = useStore((s) => s.markMode)
+  const setLocHint = useStore((s) => s.setLocHint)
+  const markRef = useRef({ on: markMode, hint: setLocHint })
+  markRef.current = { on: markMode, hint: setLocHint }
 
   // init mapa
   useEffect(() => {
@@ -124,6 +129,12 @@ export function MapView() {
     // click en el mapa: si estamos midiendo, añade un vértice; en modo GCP,
     // cierra el par foto->terreno que estaba pendiente.
     map.on('click', (e) => {
+      const mk = markRef.current
+      if (mk.on && !gcpRef.current.mode && !fovRef.current.mode) {
+        mk.hint(tt('loc.clickPhoto'))
+        setTimeout(() => markRef.current.hint(null), 3500)
+        return
+      }
       const fv = fovRef.current
       if (fv.mode) {
         if (fv.pending) fv.click(e.lngLat.lng, e.lngLat.lat)

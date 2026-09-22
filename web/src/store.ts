@@ -100,6 +100,8 @@ interface State {
   markMode: boolean // modo 'localizar': click en el vídeo -> punto localizado (coordenada + banda)
   locSelected: string | null // punto localizado resaltado (id)
   locBusy: boolean // proyectando en el backend
+  locHint: string | null // aviso del modo localizar (p.ej. "marca sobre la foto")
+  markSwapBefore: boolean // cómo estaba la vista antes de entrar en Localizar
   mapHandle: import('maplibre-gl').Map | null // el mapa real, para capturas del muestreador
   footprint: Footprint | null
 
@@ -154,6 +156,7 @@ interface State {
   setMarkMode: (on: boolean) => void
   markPoint: (px: number, py: number, imgW: number, imgH: number) => Promise<void>
   locSelect: (id: string | null) => void
+  setLocHint: (h: string | null) => void
   locRename: (id: string, label: string) => void
   locDelete: (id: string) => void
   locClear: () => void
@@ -304,6 +307,8 @@ export const useStore = create<State>((set, get) => {
     markMode: false,
     locSelected: null,
     locBusy: false,
+    locHint: null,
+    markSwapBefore: false,
     mapHandle: null,
     footprint: null,
     gcpMode: false,
@@ -500,9 +505,19 @@ export const useStore = create<State>((set, get) => {
       set({ measurePoints: [] })
     },
 
+    // Se marca sobre la FOTO. Al entrar, el vídeo pasa a ser la vista grande
+    // (con el mapa grande delante, el usuario clica el mapa y no pasa nada);
+    // al salir se restaura la vista que había.
     setMarkMode(on) {
-      set({ markMode: on })
-      if (!on) set({ locSelected: null })
+      if (on) {
+        set({ markMode: true, markSwapBefore: get().swapView, swapView: true, locHint: null, error: null })
+      } else {
+        set({ markMode: false, locSelected: null, locHint: null, swapView: get().markSwapBefore })
+      }
+    },
+
+    setLocHint(h) {
+      set({ locHint: h })
     },
 
     // Un click en la foto -> punto LOCALIZADO: coordenada + fiabilidad (theta,

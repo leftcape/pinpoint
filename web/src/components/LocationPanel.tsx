@@ -22,6 +22,8 @@ export function LocationPanel() {
   const locDelete = useStore((s) => s.locDelete)
   const locClear = useStore((s) => s.locClear)
   const locBusy = useStore((s) => s.locBusy)
+  const locHint = useStore((s) => s.locHint)
+  const error = useStore((s) => s.error)
   const markMode = useStore((s) => s.markMode)
   const setMarkMode = useStore((s) => s.setMarkMode)
   const readOnly = useStore((s) => s.readOnly)
@@ -107,8 +109,12 @@ export function LocationPanel() {
         >
           {markMode ? `■ ${t('loc.stop')}` : `⌖ ${t('loc.start')}`}
         </button>
-        {markMode && <div className="text-xs text-gray-500">{t('loc.markHelp')}</div>}
+        {markMode && <div className="text-xs text-gray-600">{t('loc.markHelp')}</div>}
         {locBusy && <div className="text-xs text-blue-600">{t('loc.busy')}</div>}
+        {locHint && <div className="text-xs text-amber-700 font-semibold">{locHint}</div>}
+        {/* los errores del store solo se mostraban en la pantalla de carga: aquí
+            hay que ver si la proyección ha fallado */}
+        {markMode && error && <div className="text-xs text-red-700">{error}</div>}
         {readOnly && <div className="text-xs text-amber-700">{t('loc.readOnlyNote')}</div>}
       </div>
 

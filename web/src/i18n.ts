@@ -249,7 +249,8 @@ const es = {
   'loc.follow': 'Seguir al dron (mantenerlo centrado)',
   'loc.mark': 'Marcar un punto en la foto',
   'loc.markHelp':
-    'Para el vídeo en el fotograma que te interese y haz click sobre lo que quieras localizar: la coordenada aparece al instante con su banda y su margen. Consejo: “Intercambiar vídeo / mapa” (en Vista) para clicar en el vídeo grande.',
+    'Haz click SOBRE LA FOTO (el vídeo, ahora en grande) en lo que quieras localizar: la coordenada aparece al instante con su banda y su margen. Para el vídeo antes en el fotograma que te interese; los controles siguen abajo.',
+  'loc.clickPhoto': '⚠ Marca sobre la foto, no sobre el mapa.',
   'loc.pxCenter': 'px del centro',
   'loc.clear': 'borrar',
   'loc.measure': 'Medir distancia',
@@ -616,7 +617,8 @@ const en: Record<Key, string> = {
   'loc.follow': 'Follow the drone (keep it centred)',
   'loc.mark': 'Mark a point on the photo',
   'loc.markHelp':
-    'Pause the video on the frame you need and click on what you want to locate: the coordinate appears at once with its band and margin. Tip: “Swap video / map” (under View) to click on the big video.',
+    'Click ON THE PHOTO (the video, now enlarged) on what you want to locate: the coordinate appears at once with its band and margin. Pause the video first on the frame you need; the controls stay at the bottom.',
+  'loc.clickPhoto': '⚠ Mark on the photo, not on the map.',
   'loc.pxCenter': 'px from centre',
   'loc.clear': 'clear',
   'loc.measure': 'Measure distance',
