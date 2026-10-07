@@ -38,7 +38,7 @@ class Footprint:
     drone_lng: float
     agl: float                             # altura sobre el terreno usada (m)
     yaw: float                             # yaw de cámara (grados)
-    pitch: float                           # pitch de cámara (grados; -90 = nadir)
+    pitch: float                           # ángulo del soporte RESPECTO DEL CUERPO (grados; -90 = perpendicular al fuselaje)
     roll: float                            # roll de cámara (grados; 0 = nivelado)
     corners: list[tuple[float, float]]     # 4 (lat, lng) rectángulo nadir -> para la IMAGEN
     # silueta real por ray-casting (trapecio si oblicuo) -> para el CONTORNO.
@@ -56,9 +56,10 @@ class Footprint:
     # Alabeo del DRON (informativo). NO se aplica a la geometría: la imagen de la
     # cámara va estabilizada en roll (validado con frames en curvas a -49°).
     drone_roll: float = 0.0
-    # Cabeceo del DRON (ATT). Interviene en la geometría del contorno (δ =
-    # mnt_pitch − drone_pitch, y Ry(θ) del cuerpo), así que se reporta para que
-    # el front pueda registrarlo: es una variable del modelo, no un dato oculto.
+    # Cabeceo del DRON (ATT). Interviene en la geometría del contorno (Ry(θ)
+    # del cuerpo, sobre el que se compone el ángulo del soporte), así que se
+    # reporta para que el front pueda registrarlo: es una variable del modelo,
+    # no un dato oculto. A alabeo 0, cabeceo terrestre de la cámara = pitch + θ.
     drone_pitch: float = 0.0
 
 
@@ -99,13 +100,17 @@ def compute_footprint(
     """
     t_log = log.t0_us + sync.video_start_trel + tv
     lat, lng, alt = log.interp_position(t_log)
-    _, pitch, yaw_mnt = log.camera_orientation_at(t_log)   # pitch del gimbal (marco terrestre)
-    # MODELO DE CÁMARA (validado con frames reales): el gimbal es de 1 eje y
-    # solo compensa el CABECEO. En roll y yaw la cámara es SOLIDARIA al dron:
-    # en curvas con alabeo ±45° los frames muestran cielo en el borde del
-    # encuadre (lado contrario al ala baja). Por tanto la orientación real es
-    # la composición: actitud del dron (roll, pitch, yaw del ATT) + cabeceo del
-    # gimbal (MNT). NO existe estabilización electrónica de roll.
+    _, pitch, yaw_mnt = log.camera_orientation_at(t_log)   # ángulo del soporte (marco del CUERPO)
+    # MODELO DE CÁMARA: MNT.Pitch es el ángulo que el autopiloto ordena al servo
+    # RESPECTO DEL CUERPO, no el cabeceo terrestre de la cámara. Verificado sobre
+    # los dos vuelos de referencia (2026-09-30): MNT.Pitch = clamp(DPitch − θ,
+    # PITCH_MIN, PITCH_MAX) con residuo de 0,1–0,2°, y leerlo como terrestre deja
+    # un error along-track que sigue al cabeceo del dron (r = 0,8). La
+    # compensación de cabeceo que haga el autopiloto ya viene DENTRO de ese
+    # ángulo. En roll y yaw la cámara es SOLIDARIA al dron: en curvas con alabeo
+    # ±45° los frames muestran cielo en el borde del encuadre (lado contrario al
+    # ala baja). La orientación real es la composición: actitud del dron (roll,
+    # pitch, yaw del ATT) + ángulo del soporte (MNT).
     drone_roll, drone_pitch, drone_yaw = log.drone_attitude_at(t_log)
     # Ajustes finos manuales (sliders del front): deltas sobre los ángulos
     # medidos, para calibrar a ojo contra la ortofoto (óptica, montaje, etc.)
@@ -124,9 +129,10 @@ def compute_footprint(
                          drone_roll=drone_roll, drone_pitch=drone_pitch)
 
     # --- gate de cenital: ¿es fiable proyectar el frame plano? ---
-    # pitch: del gimbal (estabilizado). roll: del DRON (no estabilizado) — en
+    # pitch: cabeceo TERRESTRE de la cámara = ángulo del soporte + cabeceo del
+    # dron (a alabeo pequeño, que es donde este gate decide). roll: del DRON — en
     # curvas la cámara se ladea de verdad, así que la imagen plana no es fiable.
-    pitch_dev = abs(pitch - (-90.0))
+    pitch_dev = abs(pitch + drone_pitch - (-90.0))
     roll_dev = abs(roll)
     nadir_ok = True
     reason = ""
@@ -165,9 +171,9 @@ def compute_footprint(
         corners.append((lat + north / m_per_deg_lat, lng + east / m_per_deg_lng))
 
     # --- CONTORNO real por RAY-CASTING con actitud completa ---
-    # Composición: R = Rz(yaw_dron)·Ry(pitch_dron)·Rx(roll_dron)·Ry(δ_gimbal),
-    # con δ_gimbal = pitch_MNT − pitch_dron (el gimbal compensa solo el cabeceo,
-    # de modo que a alabeo 0 el cabeceo terrestre de la cámara = MNT.Pitch).
+    # Composición: R = Rz(yaw_dron)·Ry(pitch_dron)·Rx(roll_dron)·Ry(δ_soporte),
+    # con δ_soporte = pitch_MNT, que ya es relativo al cuerpo (a alabeo 0 el
+    # cabeceo terrestre de la cámara = MNT.Pitch + pitch_dron).
     # Nivelado y nadir → rectángulo; cámara al frente → trapecio frontal;
     # curva alabeada → trapecio lateral (cielo/recorte hacia el ala alta).
     outline_corners, clipped, _caster = _raycast_outline(
@@ -188,9 +194,10 @@ def _raycast_outline(lat, lng, agl, fov_h, fov_v,
     """4 esquinas (lat,lng) de la silueta real en el suelo, con ACTITUD COMPLETA.
 
     Marco NED (x=Norte, y=Este, z=Abajo). Composición cuerpo→mundo aeroespacial
-    estándar R = Rz(ψ)·Ry(θ)·Rx(φ), y el gimbal como rotación extra de cabeceo
-    dentro del cuerpo: δ = mnt_pitch − θ (el gimbal compensa solo el cabeceo del
-    dron, así a alabeo 0 el cabeceo terrestre de la cámara = mnt_pitch).
+    estándar R = Rz(ψ)·Ry(θ)·Rx(φ), y el soporte como rotación extra de cabeceo
+    dentro del cuerpo: δ = mnt_pitch, el ángulo del servo respecto del fuselaje
+    tal como lo registra MNT (a alabeo 0, cabeceo terrestre de la cámara =
+    mnt_pitch + θ).
 
     Validación empírica del signo del alabeo: con φ≈−45° (ala izquierda baja)
     los frames muestran CIELO en el borde DERECHO de la imagen -> los rayos del
@@ -202,7 +209,7 @@ def _raycast_outline(lat, lng, agl, fov_h, fov_v,
     psi = math.radians(drone_yaw)      # rumbo: 0=N, horario
     th = math.radians(drone_pitch)     # cabeceo dron: + = morro arriba
     ph = math.radians(drone_roll)      # alabeo dron: + = ala derecha baja
-    dlt = math.radians(mnt_pitch - drone_pitch)  # cabeceo del gimbal (relativo al cuerpo)
+    dlt = math.radians(mnt_pitch)      # ángulo del soporte, ya relativo al cuerpo
 
     cps, sps = math.cos(psi), math.sin(psi)
     cth, sth = math.cos(th), math.sin(th)
@@ -284,10 +291,10 @@ def project_pixel(
     la corrección de actitud.
 
     NOTA: esto NO es equivalente a pasar pitch_offset/roll_offset para llevar los
-    ángulos a nadir. Esos deltas se suman al pitch del GIMBAL y al roll del DRON,
-    pero el cabeceo del dron (θ en Ry(θ), y dentro de δ = mnt_pitch − θ) no es
-    alcanzable desde fuera: con el dron cabeceado nunca se llega a nadir perfecto
-    por esa vía. De ahí este parámetro explícito.
+    ángulos a nadir. Esos deltas se suman al ángulo del SOPORTE y al roll del
+    DRON, pero el cabeceo del dron (θ en Ry(θ)) no es alcanzable desde fuera: con
+    el dron cabeceado nunca se llega a nadir perfecto por esa vía. De ahí este
+    parámetro explícito.
 
     Reutiliza el `cast` interno de _raycast_outline para no duplicar la mate."""
     t_log = log.t0_us + sync.video_start_trel + tv
@@ -308,7 +315,7 @@ def project_pixel(
 
     if ortho:
         # cámara colgada en nadir perfecto bajo el dron: sin cabeceo ni alabeo
-        # del cuerpo, y gimbal apuntando recto abajo (δ = −90 − 0 = −90).
+        # del cuerpo, y soporte apuntando recto abajo (δ = −90).
         drone_pitch, drone_roll, pitch = 0.0, 0.0, -90.0
 
     _, _, (cast, hw, hh) = _raycast_outline(

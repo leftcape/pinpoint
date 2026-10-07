@@ -58,7 +58,8 @@ class BinLog:
     att_roll: list[float] = field(default_factory=list)    # alabeo del DRON (grados)
     att_pitch: list[float] = field(default_factory=list)   # cabeceo del DRON (grados)
     # gimbal (MNT): listas paralelas t_us (s), roll, pitch, yaw-earth (grados)
-    # pitch≈-90 = cámara nadir (mirando al suelo). Vacío si el log no tiene MNT.
+    # pitch = ángulo del servo respecto del CUERPO (≈-90 = perpendicular al
+    # fuselaje). Vacío si el log no tiene MNT.
     mnt_t: list[float] = field(default_factory=list)
     mnt_roll: list[float] = field(default_factory=list)
     mnt_pitch: list[float] = field(default_factory=list)
@@ -133,15 +134,17 @@ class BinLog:
         return len(self.mnt_t) > 0
 
     def camera_orientation_at(self, t_us: float) -> tuple[float, float, float]:
-        """Orientación de la CÁMARA (roll, pitch, yaw en grados, marco terrestre)
-        en el instante t_us. Usa el gimbal (MNT) si existe; si no, cae a la
-        actitud del dron (roll/pitch 0, yaw del ATT) asumiendo cámara nadir fija.
-        Nearest (no interpolado) para evitar el wrap del yaw."""
+        """Orientación del SOPORTE de la cámara (roll, pitch, yaw en grados) en
+        el instante t_us. El pitch es el ángulo del servo RESPECTO DEL CUERPO
+        (-90 = perpendicular al fuselaje), no el cabeceo terrestre de la cámara:
+        el cabeceo del dron hay que componerlo aparte (ver footprint.py). Usa el
+        gimbal (MNT) si existe; si no, asume cámara fija al cuerpo mirando abajo,
+        con el yaw del ATT. Nearest (no interpolado) para evitar el wrap del yaw."""
         if self.has_gimbal:
             i = bisect.bisect_left(self.mnt_t, t_us)
             i = max(0, min(i, len(self.mnt_t) - 1))
             return self.mnt_roll[i], self.mnt_pitch[i], self.mnt_yaw[i]
-        # sin gimbal: asumir cámara mirando abajo, yaw = yaw del dron
+        # sin gimbal: cámara fija al cuerpo mirando abajo, yaw = yaw del dron
         return 0.0, -90.0, self.yaw_at(t_us)
 
     def drone_attitude_at(self, t_us: float) -> tuple[float, float, float]:

@@ -57,8 +57,11 @@ def _samples(log: BinLog, sr: SyncResult, duration_s: float, step: float):
         if 0.0 <= t_rel <= log.duration_s:
             t_log = log.t0_us + t_rel
             _lat, _lng, alt = log.interp_position(t_log)
-            roll, _dpitch, yaw = log.drone_attitude_at(t_log)
+            roll, dpitch, yaw = log.drone_attitude_at(t_log)
             _, pitch, yaw_mnt = log.camera_orientation_at(t_log)
+            # cabeceo TERRESTRE de la cámara: el del soporte (relativo al
+            # cuerpo) más el del dron. Es el que se compara con el nadir.
+            pitch = pitch + dpitch
             if not log.att_t:
                 yaw = yaw_mnt
             rate = 0.0 if prev_yaw is None else abs(_wrap(yaw - prev_yaw)) / step

@@ -13,11 +13,13 @@ central en oblicuo tienen el mismo theta, y merecen la misma confianza.
 
 BANDAS. Tres bandas por theta, cada una con el MARGEN que cabe esperar,
 expresado como percentil 90 del error medido en la campaña del vuelo 1 del
-artículo (100 puntos de control, proyección con actitud completa, ~119 m AGL):
+artículo (100 puntos de control, proyección con actitud completa, ~119 m AGL),
+recalculados con el modelo del soporte corregido (2026-09-30: MNT.Pitch es
+relativo al cuerpo). Son los de la tabla del artículo (macros \bandXMargin):
 
-    A  fiable        0–15°   P90 = 10 m   (mediana  7.8 m, n = 15)
-    B  degradada    15–45°   P90 = 22 m   (mediana 11.5 m, n = 52)
-    C  orientativa  45–90°   P90 = 116 m  (mediana 30.8 m, n = 33)
+    A  fiable        0–15°   P90 =   9 m  (mediana  3.6 m, n = 15)
+    B  degradada    15–45°   P90 =  15 m  (mediana  8.9 m, n = 52)
+    C  orientativa  45–90°   P90 = 130 m  (mediana 31.2 m, n = 33)
 
 Los márgenes son EMPÍRICOS y de esa campaña: no se escalan con la altura ni
 con la plataforma (decisión 2026-09-22: lo publicado es lo trazable; la
@@ -54,9 +56,9 @@ class Band:
 
 # Tabla de bandas de fiabilidad del artículo (vuelo 1, actitud completa).
 BANDS: tuple[Band, ...] = (
-    Band("A", 0.0, 15.0, 10.0, 7.8, 15),
-    Band("B", 15.0, 45.0, 22.0, 11.5, 52),
-    Band("C", 45.0, 90.0, 116.0, 30.8, 33),
+    Band("A", 0.0, 15.0, 9.0, 3.6, 15),
+    Band("B", 15.0, 45.0, 15.0, 8.9, 52),
+    Band("C", 45.0, 90.0, 130.0, 31.2, 33),
 )
 
 # Origen de la tabla, para que el front y el CSV lo puedan declarar.

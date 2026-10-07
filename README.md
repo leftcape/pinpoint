@@ -330,7 +330,7 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
   Puntos de control: rectas para E1, virajes para E3); `scripts/analisis_campana.py`
   (figuras E1–E4 desde `campaign.json` y **reproyección** con otro terreno / FOV /
   desfase de sincronía sin volver a marcar).
-- **v0.4.0 (actual)** — **modo Localizar**, la vertiente operativa: cada punto
+- **v0.4.0** — **modo Localizar**, la vertiente operativa: cada punto
   señalado se entrega con su ángulo de visión θ = arctan(d/AGL), su banda de
   fiabilidad A/B/C y su margen esperable (P90 medido en la campaña del vuelo 1;
   `pinpoint_core/reliability.py`, verificado contra los 100 GCP: reproduce la
@@ -338,6 +338,12 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
   `campaign.json` (clave `located`, sin fotograma); exportación CSV / GeoJSON /
   ZIP con los fotogramas señalados y su ficha. Funciona también en modo lectura
   (los puntos quedan en el navegador y en la exportación).
+- **v0.4.1 (actual)** — **modelo del soporte corregido**: `MNT.Pitch` es el
+  ángulo del servo respecto del cuerpo, no el cabeceo terrestre de la cámara, y
+  se compone con la actitud del dron sin restarle su cabeceo. Mejora la
+  proyección cerca de la vertical (RMSE cenital del vuelo 1: 12,7 → 9,1 m) y el
+  gate cenital usa el cabeceo terrestre (soporte + dron). Márgenes de las bandas
+  recalculados con el modelo corregido (A 9 m · B 15 m · C 130 m).
 - **Siguiente** — ray-cast del píxel contra el terreno inclinado; dataset de
   ejemplo citable (DOI).
 
