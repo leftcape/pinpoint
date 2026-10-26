@@ -17,9 +17,14 @@ artículo (100 puntos de control, proyección con actitud completa, ~119 m AGL),
 recalculados con el modelo del soporte corregido (2026-09-30: MNT.Pitch es
 relativo al cuerpo). Son los de la tabla del artículo (macros \bandXMargin):
 
-    A  fiable        0–15°   P90 =   9 m  (mediana  3.6 m, n = 15)
-    B  degradada    15–45°   P90 =  15 m  (mediana  8.9 m, n = 52)
-    C  orientativa  45–90°   P90 = 130 m  (mediana 31.2 m, n = 33)
+    A  fiable        0–30°   P90 =  10 m  (mediana  4.1 m, n = 46)
+    B  degradada    30–60°   P90 =  27 m  (mediana 13.2 m, n = 31)
+    C  orientativa  60–90°   P90 = 133 m  (mediana 50.1 m, n = 23)
+
+LÍMITES (2026-10-26). Se leen en las medianas del error por intervalos de 10°
+del vuelo 1: planas (3.5–4.7 m) hasta 30°, 12–27 m de 30° a 60°, decenas a
+centenas por encima. Antes eran 15°/45°, sacados del modelo eps0/cos²theta
+(donde sube un 7 % y donde dobla eps0), que no se veían en los datos.
 
 Los márgenes son EMPÍRICOS y de esa campaña: no se escalan con la altura ni
 con la plataforma (decisión 2026-09-22: lo publicado es lo trazable; la
@@ -27,8 +32,8 @@ mediana/altura no sale constante entre los dos vuelos, 0.066 frente a 0.081,
 así que escalar sería extrapolar). theta y AGL se devuelven junto a la banda
 para que quien recibe la coordenada pueda juzgar por sí mismo.
 
-Modelo de referencia del artículo (NO se usa para el margen, solo se expone):
-eps(theta) ≈ eps0 / cos²(theta), con eps0 la mediana en la banda A.
+Modelo de referencia (NO se usa para el margen ni para los límites, solo se
+expone): eps(theta) ≈ eps0 / cos²(theta), con eps0 la mediana en la banda A.
 
 DE DÓNDE SALE d_nadir. En la herramienta, del punto PROYECTADO: es lo único
 que se conoce en campo. En el análisis del artículo la tabla se construyó con
@@ -56,9 +61,9 @@ class Band:
 
 # Tabla de bandas de fiabilidad del artículo (vuelo 1, actitud completa).
 BANDS: tuple[Band, ...] = (
-    Band("A", 0.0, 15.0, 9.0, 3.6, 15),
-    Band("B", 15.0, 45.0, 15.0, 8.9, 52),
-    Band("C", 45.0, 90.0, 130.0, 31.2, 33),
+    Band("A", 0.0, 30.0, 10.0, 4.1, 46),
+    Band("B", 30.0, 60.0, 27.0, 13.2, 31),
+    Band("C", 60.0, 90.0, 133.0, 50.1, 23),
 )
 
 # Origen de la tabla, para que el front y el CSV lo puedan declarar.

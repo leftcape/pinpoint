@@ -51,7 +51,7 @@ export interface LocatedPoint {
 }
 
 export const BAND_COLOR: Record<BandCode, string> = { A: '#16a34a', B: '#d97706', C: '#dc2626' }
-export const BAND_RANGE: Record<BandCode, string> = { A: '0–15°', B: '15–45°', C: '45–90°' }
+export const BAND_RANGE: Record<BandCode, string> = { A: '0–30°', B: '30–60°', C: '60–90°' }
 
 export function newId(): string {
   return Math.random().toString(36).slice(2, 10)

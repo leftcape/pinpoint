@@ -242,7 +242,7 @@ campaña **bloqueada**, para que nada cambie bajo los pies):
    sincronía, FOV y terreno se va a calcular.
 2. Para el vídeo en el fotograma que interese y haz click sobre lo que quieras
    localizar. La coordenada aparece al instante con su **banda** (A fiable
-   0–15°, B degradada 15–45°, C orientativa 45–90°, por ángulo de visión) y su
+   0–30°, B degradada 30–60°, C orientativa 60–90°, por ángulo de visión) y su
    **margen esperable** (P90). En el mapa, el punto con el círculo del margen.
 3. Los puntos se acumulan en una lista (etiqueta editable; clicar uno lleva el
    vídeo y el mapa a él) y se guardan con el vuelo.
@@ -344,6 +344,9 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
   proyección cerca de la vertical (RMSE cenital del vuelo 1: 12,7 → 9,1 m) y el
   gate cenital usa el cabeceo terrestre (soporte + dron). Márgenes de las bandas
   recalculados con el modelo corregido (A 9 m · B 15 m · C 130 m).
+- **2026-10-26** — **bandas de fiabilidad a 30° y 60°**, leídas en las medianas
+  del error por intervalos de 10° del vuelo 1 (antes 15°/45°, del modelo
+  ε₀/cos²θ). Márgenes: A 10 m · B 27 m · C 133 m.
 - **Siguiente** — ray-cast del píxel contra el terreno inclinado; dataset de
   ejemplo citable (DOI).
 
