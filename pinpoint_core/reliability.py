@@ -12,21 +12,23 @@ del píxel en el encuadre: un punto en el borde de un fotograma cenital y uno
 central en oblicuo tienen el mismo theta, y merecen la misma confianza.
 
 BANDAS. Tres bandas por theta, cada una con el MARGEN que cabe esperar,
-expresado como percentil 90 del error medido en la campaña del vuelo 1 del
-artículo (100 puntos de control, proyección con actitud completa, ~119 m AGL),
+expresado como percentil 90 del error medido en las campañas de los DOS vuelos
+del artículo (180 puntos de control, proyección con actitud completa, 89–118 m
+AGL),
 recalculados con el modelo del soporte corregido (2026-09-30: MNT.Pitch es
 relativo al cuerpo). Son los de la tabla del artículo (macros \bandXMargin):
 
-    A  fiable        0–30°   P90 =  10 m  (mediana  4.1 m, n = 46)
-    B  degradada    30–60°   P90 =  27 m  (mediana 13.2 m, n = 31)
-    C  orientativa  60–90°   P90 = 133 m  (mediana 50.1 m, n = 23)
+    A  fiable        0–30°   P90 =  10 m  (mediana  4.6 m, n = 89)
+    B  degradada    30–60°   P90 =  27 m  (mediana 12.3 m, n = 64)
+    C  orientativa  60–90°   P90 = 130 m  (mediana 54.6 m, n = 27)
 
 LÍMITES (2026-10-26). Se leen en las medianas del error por intervalos de 10°
-del vuelo 1: planas (3.5–4.7 m) hasta 30°, 12–27 m de 30° a 60°, decenas a
-centenas por encima. Antes eran 15°/45°, sacados del modelo eps0/cos²theta
+de los dos vuelos: planas (3.5–5.2 m) hasta 30°, 9–27 m de 30° a 60°, decenas
+a centenas por encima. Límites y márgenes salen de los dos vuelos juntos, así
+que la cobertura de cada vuelo (90 % y 91 %) no es una validación independiente. Antes eran 15°/45°, sacados del modelo eps0/cos²theta
 (donde sube un 7 % y donde dobla eps0), que no se veían en los datos.
 
-Los márgenes son EMPÍRICOS y de esa campaña: no se escalan con la altura ni
+Los márgenes son EMPÍRICOS y de esas campañas: no se escalan con la altura ni
 con la plataforma (decisión 2026-09-22: lo publicado es lo trazable; la
 mediana/altura no sale constante entre los dos vuelos, 0.066 frente a 0.081,
 así que escalar sería extrapolar). theta y AGL se devuelven junto a la banda
@@ -59,15 +61,15 @@ class Band:
     n: int
 
 
-# Tabla de bandas de fiabilidad del artículo (vuelo 1, actitud completa).
+# Tabla de bandas de fiabilidad del artículo (dos vuelos, actitud completa).
 BANDS: tuple[Band, ...] = (
-    Band("A", 0.0, 30.0, 10.0, 4.1, 46),
-    Band("B", 30.0, 60.0, 27.0, 13.2, 31),
-    Band("C", 60.0, 90.0, 133.0, 50.1, 23),
+    Band("A", 0.0, 30.0, 10.0, 4.6, 89),
+    Band("B", 30.0, 60.0, 27.0, 12.3, 64),
+    Band("C", 60.0, 90.0, 130.0, 54.6, 27),
 )
 
 # Origen de la tabla, para que el front y el CSV lo puedan declarar.
-BANDS_SOURCE = "P90 empírico, campaña vuelo 1 del artículo (100 GCP, ~119 m AGL)"
+BANDS_SOURCE = "P90 empírico, dos vuelos del artículo (180 GCP, 89–118 m AGL)"
 
 
 def view_angle_deg(d_nadir_m: float, agl_m: float) -> float:

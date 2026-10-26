@@ -249,8 +249,8 @@ campaña **bloqueada**, para que nada cambie bajo los pies):
 4. **Exportar**: CSV, GeoJSON, o ZIP con además cada fotograma con sus puntos
    señalados y la ficha al pie, para entregarlo a un equipo.
 
-Los márgenes son los medidos en la campaña del vuelo 1 del artículo (100 puntos,
-~119 m AGL) y **no se escalan con la altura**: θ y AGL se muestran al lado para
+Los márgenes son los medidos en los dos vuelos del artículo (180 puntos,
+89–118 m AGL) y **no se escalan con la altura**: θ y AGL se muestran al lado para
 que quien recibe la coordenada juzgue.
 
 ---
@@ -345,8 +345,9 @@ inclinado (para píxeles muy oblicuos sobre pendientes) queda pendiente.
   gate cenital usa el cabeceo terrestre (soporte + dron). Márgenes de las bandas
   recalculados con el modelo corregido (A 9 m · B 15 m · C 130 m).
 - **2026-10-26** — **bandas de fiabilidad a 30° y 60°**, leídas en las medianas
-  del error por intervalos de 10° del vuelo 1 (antes 15°/45°, del modelo
-  ε₀/cos²θ). Márgenes: A 10 m · B 27 m · C 133 m.
+  del error por intervalos de 10° de los dos vuelos (antes 15°/45°, del modelo
+  ε₀/cos²θ). Márgenes, P90 de los 180 puntos de los dos vuelos: A 10 m · B 27 m
+  · C 130 m.
 - **Siguiente** — ray-cast del píxel contra el terreno inclinado; dataset de
   ejemplo citable (DOI).
 

@@ -294,10 +294,10 @@ const es = {
   'loc.exportDone': 'exportado: {f}',
   'loc.view': 'Vista',
   'loc.bandsSource':
-    'Bandas por ángulo de visión θ = arctan(d/AGL). Márgenes: percentil 90 del error medido en la campaña del vuelo 1 del artículo (100 puntos de control, ~119 m de altura). No se escalan con la altura: θ y AGL se muestran para que juzgues.',
+    'Bandas por ángulo de visión θ = arctan(d/AGL). Márgenes: percentil 90 del error medido en los dos vuelos del artículo (180 puntos de control, 89–118 m de altura). No se escalan con la altura: θ y AGL se muestran para que juzgues.',
   'loc.errProject': 'No se pudo proyectar el punto (¿aeronave demasiado baja, o servidor anterior a 0.4?).',
   'loc.readme':
-    'PinPoint — puntos localizados\n\n{n} punto(s) en {f} fotograma(s). Exportado: {date}\n\nlocated.csv / located.geojson: una fila (un punto) por localización: coordenada WGS84, banda de fiabilidad (A fiable 0–30°, B degradada 30–60°, C orientativa 60–90°), margen esperable (P90, metros), ángulo de visión theta, distancia a la vertical de la aeronave, altura sobre el terreno, instante del vídeo, y la configuración con que se calculó (sincronía, FOV, terreno, deltas).\n\nframes/: cada fotograma con sus puntos señalados y la ficha al pie.\n\nLos márgenes son el percentil 90 del error medido en la campaña de puntos de control del vuelo 1 del artículo que acompaña a PinPoint (100 puntos, ~119 m AGL). No se escalan con la altura.\n',
+    'PinPoint — puntos localizados\n\n{n} punto(s) en {f} fotograma(s). Exportado: {date}\n\nlocated.csv / located.geojson: una fila (un punto) por localización: coordenada WGS84, banda de fiabilidad (A fiable 0–30°, B degradada 30–60°, C orientativa 60–90°), margen esperable (P90, metros), ángulo de visión theta, distancia a la vertical de la aeronave, altura sobre el terreno, instante del vídeo, y la configuración con que se calculó (sincronía, FOV, terreno, deltas).\n\nframes/: cada fotograma con sus puntos señalados y la ficha al pie.\n\nLos márgenes son el percentil 90 del error medido en las campañas de puntos de control de los dos vuelos del artículo que acompaña a PinPoint (180 puntos, 89–118 m AGL). No se escalan con la altura.\n',
 
   'vp.markTitle': 'Click para marcar un punto en el suelo',
   'vp.pairTitle': 'Click en el rasgo en la foto y luego en el mapa',
@@ -662,10 +662,10 @@ const en: Record<Key, string> = {
   'loc.exportDone': 'exported: {f}',
   'loc.view': 'View',
   'loc.bandsSource':
-    'Bands by view angle θ = arctan(d/AGL). Margins: 90th percentile of the error measured in the flight-1 campaign of the paper (100 control points, ~119 m AGL). They are not scaled with height: θ and AGL are shown so you can judge.',
+    'Bands by view angle θ = arctan(d/AGL). Margins: 90th percentile of the error measured in the two flights of the paper (180 control points, 89–118 m AGL). They are not scaled with height: θ and AGL are shown so you can judge.',
   'loc.errProject': 'The point could not be projected (aircraft too low, or server older than 0.4?).',
   'loc.readme':
-    'PinPoint — located points\n\n{n} point(s) in {f} frame(s). Exported: {date}\n\nlocated.csv / located.geojson: one row (one point) per location: WGS84 coordinate, reliability band (A reliable 0–30°, B degraded 30–60°, C indicative 60–90°), expected margin (P90, metres), view angle theta, distance from the aircraft nadir, height above ground, video time, and the configuration it was computed with (sync, FOV, terrain, deltas).\n\nframes/: each frame with its points marked and the data sheet at the bottom.\n\nMargins are the 90th percentile of the error measured in the flight-1 control-point campaign of the paper that accompanies PinPoint (100 points, ~119 m AGL). They are not scaled with height.\n',
+    'PinPoint — located points\n\n{n} point(s) in {f} frame(s). Exported: {date}\n\nlocated.csv / located.geojson: one row (one point) per location: WGS84 coordinate, reliability band (A reliable 0–30°, B degraded 30–60°, C indicative 60–90°), expected margin (P90, metres), view angle theta, distance from the aircraft nadir, height above ground, video time, and the configuration it was computed with (sync, FOV, terrain, deltas).\n\nframes/: each frame with its points marked and the data sheet at the bottom.\n\nMargins are the 90th percentile of the error measured in the control-point campaigns of the two flights of the paper that accompanies PinPoint (180 points, 89–118 m AGL). They are not scaled with height.\n',
 
   'vp.markTitle': 'Click to mark a point on the ground',
   'vp.pairTitle': 'Click the feature on the photo, then on the map',
